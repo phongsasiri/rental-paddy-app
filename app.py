@@ -5,7 +5,7 @@ import plotly.express as px
 from datetime import datetime, timedelta
 
 # ==========================================
-# 1. การตั้งค่าระบบและลิงก์ฐานข้อมูล (เชื่อมโยงตามที่คุณระบุ)
+# 1. การตั้งค่าระบบและลิงก์ฐานข้อมูลภายนอก
 # ==========================================
 GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1rOuS3DH6cLMYf0841LrwYcoNsa8IQFLUkxKRg-Kht90/edit?gid=1501708046#gid=1501708046"
 GOOGLE_DRIVE_FOLDER = "https://google.com"
@@ -13,13 +13,13 @@ GOOGLE_DRIVE_FOLDER = "https://google.com"
 st.set_page_config(page_title="ระบบจัดการที่นาและบ้านเช่า", layout="wide")
 
 # ==========================================
-# 2. ฟังก์ชันจดจำและจำลองหน่วยความจำ (แก้บั๊กข้อมูลหาย)
+# 2. ฟังก์ชันจดจำและจำลองหน่วยความจำ (Session State)
 # ==========================================
 def initialize_persistent_data():
     current_date = datetime.now()
     past_payment_date = (current_date - timedelta(days=65)).strftime("%Y-%m-%d")
     
-    # โหลดค่าเริ่มต้นของที่ดิน/บ้านเช่า
+    # 1. โหลดค่าเริ่มต้นของข้อมูลที่ดิน / บ้านเช่า
     if 'lands_df' not in st.session_state:
         lands_data = {
             "รหัสที่ดิน": ["L001", "L002", "L003", "L004"],
@@ -33,11 +33,11 @@ def initialize_persistent_data():
                                (current_date + timedelta(days=30)).strftime("%Y-%m-%d"),
                                (current_date + timedelta(days=15)).strftime("%Y-%m-%d"),
                                (current_date + timedelta(days=120)).strftime("%Y-%m-%d")],
-            "สถานะภาษี": ["ยังไม่ได้ชำระ", "ชำระแล้ว", "ยังไม่ได้ชำระ", "ชำระแล้ว"]
+            "สถานะภาษี": ["ยังไม่ได้ชำระ", "ชำระแล้ว", "ยังไม่ได้ชำระ", "ชำrateแล้ว"]
         }
         st.session_state.lands_df = pd.DataFrame(lands_data)
         
-    # โหลดค่าเริ่มต้นของประวัติการชำระเงิน (ตั้งค่าย้อนหลัง 65 วันเพื่อทดสอบระบบเตือน 2 เดือน)
+    # 2. โหลดค่าเริ่มต้นของประวัติการชำระเงิน (ย้อนหลัง 65 วันเพื่อทดสอบระบบเตือน 2 เดือน)
     if 'payments_df' not in st.session_state:
         payments_data = {
             "เลขที่ใบชำระ": ["REC-001", "REC-002"],
@@ -51,7 +51,7 @@ def initialize_persistent_data():
         }
         st.session_state.payments_df = pd.DataFrame(payments_data)
         
-    # โหลดค่าเริ่มต้นของผู้เช่า
+    # 3. โหลดค่าเริ่มต้นของรายชื่อผู้เช่า
     if 'tenants_df' not in st.session_state:
         tenants_data = {
             "ชื่อผู้เช่า": ["นายสมชาย ดีใจ", "นางมณี ตั้งใจ", "นายอนันต์ เรียนดี"],
@@ -61,7 +61,7 @@ def initialize_persistent_data():
         }
         st.session_state.tenants_df = pd.DataFrame(tenants_data)
 
-    # โหลดค่าเริ่มต้นของพนักงาน
+    # 4. โหลดค่าเริ่มต้นของข้อมูลพนักงาน
     if 'staff_df' not in st.session_state:
         staff_data = {
             "ชื่อ-นามสกุล": ["พนักงานสมศักดิ์", "พนักงานรักดี"],
@@ -71,106 +71,104 @@ def initialize_persistent_data():
         }
         st.session_state.staff_df = pd.DataFrame(staff_data)
 
-# รันระบบจำลองความปลอดภัยของข้อมูล
+# เริ่มรันการจดจำข้อมูลจำลอง
 initialize_persistent_data()
 
 # ==========================================
 # 3. แถบเมนูด้านซ้าย (Sidebar Navigation)
 # ==========================================
 st.sidebar.title("🌾 ระบบจัดการที่เช่า")
-st.sidebar.info(f"🔗 ลิงก์ระบบจัดเก็บข้อมูลภายนอก:\n* [เปิดดู Google Sheets]({GOOGLE_SHEET_URL})\n* [เปิดโฟลเดอร์ภาพ Google Drive]({GOOGLE_DRIVE_FOLDER})")
+st.sidebar.info(f"🔗 ลิงก์เชื่อมโยงฐานข้อมูลหลัก:\n* [เปิดดู Google Sheets]({GOOGLE_SHEET_URL})\n* [เปิดคลังภาพ Google Drive]({GOOGLE_DRIVE_FOLDER})")
 st.sidebar.write("---")
 menu = st.sidebar.radio(
-    "เมนูการใช้งานระบบ",
+    "เลือกหน้าเมนูการใช้งาน",
     ["🏠 หน้าแรก (Dashboard)", "📂 บันทึกรายละเอียดที่ดิน/บ้านเช่า", "👥 บันทึกรายละเอียดผู้เช่า", "📋 บันทึกการชำระค่าเช่า", "🧑‍💼 บันทึกรายละเอียดพนักงาน"]
 )
 
 # ==========================================
-# 4. ฟังก์ชันการทำงานแต่ละหน้าจอเมนู
+# 4. การประมวลผลอินเทอร์เฟซแต่ละหน้าเมนู
 # ==========================================
 
 # --- หน้าที่ 1: DASHBOARD ---
 if menu == "🏠 หน้าแรก (Dashboard)":
     st.title("📊 ภาพรวมระบบจัดการค่าเช่า (Dashboard)")
     
-    # คำนวณค่าทางสถิติ
+    # คำนวณตัวเลขทางสถิติ
     total_vacant = len(st.session_state.lands_df[st.session_state.lands_df["สถานะ"] == "ว่าง"])
     unpaid_tax = len(st.session_state.lands_df[st.session_state.lands_df["สถานะภาษี"] == "ยังไม่ได้ชำระ"])
     overdue_tenants = st.session_state.tenants_df[st.session_state.tenants_df["ค้างชำระ (บาท)"] > 0]
     
-    # การ์ดสรุปข้อมูลเด่นชัดด้านบนสุด
+    # ส่วนหัวแสดงตัวเลขการ์ดสรุปใจความสำคัญ
     col1, col2, col3 = st.columns(3)
     with col1: st.metric(label="🏠 ทรัพย์สินที่ยังว่างอยู่", value=f"{total_vacant} แปลง/ห้อง")
-    with col2: st.metric(label="⚠️ ที่ดินค้างชำระภาษี", value=f"{unpaid_tax} แปลง", delta="กรุณาตรวจสอบ", delta_color="inverse")
+    with col2: st.metric(label="⚠️ ที่ดินค้างชำระภาษี", value=f"{unpaid_tax} แปลง")
     with col3: st.metric(label="👥 ผู้เช่าค้างชำระเงิน", value=f"{len(overdue_tenants)} ราย")
 
     st.write("---")
     
     g_col1, g_col2 = st.columns(2)
     with g_col1:
-        # แผนภูมิวงกลมแสดงสัดส่วนบ้านเช่าและที่นา
-        fig = px.pie(st.session_state.lands_df, names='สถานะ', title='📊 สัดส่วนสถานะการเช่าทรัพย์สินปัจจุบัน', color='สถานะ', color_discrete_map={'ว่าง': '#cccccc', 'มีคนเช่า': '#2ca02c'})
+        # แสดงกราฟสัดส่วนทรัพย์สินแบบวงกลม (Pie Chart)
+        fig = px.pie(st.session_state.lands_df, names='สถานะ', title='📊 แผนภูมิสัดส่วนสถานะการเช่าปัจจุบัน', color='สถานะ', color_discrete_map={'ว่าง': '#cccccc', 'มีคนเช่า': '#2ca02c'})
         st.plotly_chart(fig, use_container_width=True)
         
     with g_col2:
         st.subheader("🚨 ระบบแจ้งเตือนอัจฉริยะ (Smart Reminder)")
-        
-        # 🟢 ฟังก์ชันแจ้งลงตรวจนา 2 เดือนหลังเก็บเกี่ยว
-        st.write("**🌾 รายการลงพื้นที่ตรวจแปลงนาหลังเก็บเกี่ยว (ครบ 2 เดือน):**")
+        st.write("**🌾 รายการลงพื้นที่ตรวจแปลงนาหลังเก็บเกี่ยว (ครบกำหนด 2 เดือน):**")
         current_time = datetime.now()
         alert_triggered = False
         
+        # ค้นหาบิลค่าเช่านาหลังเก็บเกี่ยวเพื่อตรวจสอบวันเวลา
         for idx, row in st.session_state.payments_df.iterrows():
             if row["ประเภทการเช่า"] == "หลังเก็บเกี่ยว":
                 pay_date = datetime.strptime(row["วันที่ชำระ"], "%Y-%m-%d")
                 days_passed = (current_time - pay_date).days
                 
-                # หากชำระเงินเกิน 60 วัน (2 เดือน) ให้ขึ้นแถบสีแดงแจ้งเตือนทันที
+                # ถ้าพ้นเวลา 60 วัน (2 เดือน) ให้ขึ้นแจ้งเตือนกรอบสีแดงสะดุดตาทันที
                 if days_passed >= 60:
                     alert_triggered = True
                     st.error(f"""
-                    ⏰ **ตรวจพบการเก็บเกี่ยวพ้นกำหนดเวลา:**  
-                    *   **ทรัพย์สิน:** {row['ชื่อทรัพย์สิน']}  
-                    *   **ผู้เช่ารายล่าสุด:** {row['ชื่อคนเช่า']}  
-                    *   **สถานะเวลา:** ชำระรอบเก็บเกี่ยวมาแล้ว {days_passed} วัน (เกิน 2 เดือนแล้ว)  
-                    👉 **คำแนะนำ:** เจ้าของควรลงพื้นที่ตรวจสอบว่าเริ่มมีการทำนารอบใหม่แล้วหรือยัง
+                    ⏰ **แจ้งเตือนความคืบหน้าแปลงนา:**  
+                    *   **ชื่อทรัพย์สิน:** {row['ชื่อทรัพย์สิน']}  
+                    *   **ผู้เช่าล่าสุด:** {row['ชื่อคนเช่า']}  
+                    *   **ประวัติเวลา:** ชำระรอบเก็บเกี่ยวไปแล้ว {days_passed} วัน (พ้นรอบ 2 เดือน)  
+                    👉 **สิ่งที่ต้องทำ:** กรุณาลงพื้นที่ไปตรวจดูว่าเริ่มทำนารอบใหม่แล้วหรือยัง
                     """)
-                    if st.button(f"✅ บันทึกว่าลงตรวจแปลงแล้ว ({row['ชื่อทรัพย์สิน']})", key=f"inspect_{idx}"):
-                        st.success("บันทึกภารกิจลงตรวจเรียบร้อย!")
+                    if st.button(f"✅ บันทึกว่าลงตรวจแล้ว ({row['ชื่อทรัพย์สิน']})", key=f"check_{idx}"):
+                        st.success("บันทึกการตรวจสอบความเรียบร้อยสำเร็จ!")
                         
         if not alert_triggered:
-            st.info("🟢 ปัจจุบันยังไม่มีรายการที่นาที่ต้องลงตรวจรอบ 2 เดือนค่ะ")
+            st.info("🟢 ปัจจุบันไม่มีรายการที่นาค้างตรวจรอบ 2 เดือนค่ะ")
 
-    # ตารางแสดงชื่อคนเช่าที่ค้างชำระเงิน
     st.write("---")
-    st.subheader("📋 รายชื่อผู้เช่าที่ยังค้างชำระค่าเช่าระบบ")
+    st.subheader("📋 รายชื่อผู้เช่าที่ค้างชำระค่าเช่า ณ ปัจจุบัน")
     if len(overdue_tenants) > 0:
-        st.table(overdue_tenants)
+        st.table(overdue_tenants[["ชื่อผู้เช่า", "เบอร์โทร", "ค้างชำระ (บาท)"]])
     else:
-        st.success("🎉 ยินดีด้วย: ไม่มีรายชื่อผู้เช่าค้างชำระเงินในระบบขณะนี้")
+        st.success("🎉 ทุกรายจ่ายเงินเรียบร้อย: ไม่มีรายชื่อผู้เช่าค้างชำระเงินในระบบ")
 
 # --- หน้าที่ 2: บันทึกรายละเอียดที่ดิน ---
 elif menu == "📂 บันทึกรายละเอียดที่ดิน/บ้านเช่า":
     st.title("📂 ระบบบันทึกและจัดการข้อมูลที่ดิน/บ้านเช่า")
     
-    with st.form("land_input_form", clear_on_submit=True):
-        st.write("### ➕ เพิ่มรายละเอียดข้อมูลแปลงที่ดิน/บ้านเช่าใหม่")
+    with st.form("land_form", clear_on_submit=True):
+        st.write("### ➕ บันทึกเพิ่มข้อมูลที่ดิน/บ้านเช่าแปลงใหม่")
         f_col1, f_col2 = st.columns(2)
         with f_col1:
-            land_id = st.text_input("รหัสที่ดิน/บ้านเช่า (เช่น L005)")
+            land_id = st.text_input("รหัสทรัพย์สิน (เช่น L005)")
             land_name = st.text_input("ชื่อเรียกที่ดิน หรือ ชื่อบ้านเช่า")
-            land_type = st.selectbox("ประเภทสินทรัพย์", ["ที่นา", "บ้านเช่า"])
-            land_status = st.selectbox("สถานะการใช้งาน", ["ว่าง", "มีคนเช่า"])
-            rent_type = st.selectbox("ประเภทการเช่า", ["รายเดือน", "จ่ายก่อนทำรายปี", "หลังเก็บเกี่ยว"])
+            land_type = st.selectbox("ประเภทสินทรัพย์เช่า", ["ที่นา", "บ้านเช่า"])
+            land_status = st.selectbox("สถานะการใช้งานปัจจุบัน", ["ว่าง", "มีคนเช่า"])
+            rent_type = st.selectbox("ข้อตกลงประเภทการเช่า", ["รายเดือน", "จ่ายก่อนทำรายปี", "หลังเก็บเกี่ยว"])
         with f_col2:
             deposit = st.number_input("เงินมัดจำล่วงหน้า (บาท)", min_value=0.0, value=0.0, step=500.0)
-            rent_price = st.number_input("อัตราค่าเช่าที่เรียกเก็บ (บาท)", min_value=0.0, value=0.0, step=500.0)
+            rent_price = st.number_input("เงินค่าเช่า/รอบชำระ (บาท)", min_value=0.0, value=0.0, step=500.0)
             tax_date = st.date_input("วันครบกำหนดชำระภาษีที่ดินประจำปี")
-            tax_status = st.selectbox("สถานะการชำระภาษี", ["ชำระแล้ว", "ยังไม่ได้ชำระ"])
-            st.file_uploader("📸 แนบรูปภาพทรัพย์สิน (เลือกรูปภาพส่งเข้า Drive)", accept_multiple_files=True)
-            st.file_uploader("📄 แนบหลักฐานเอกสารสิทธิ์ PDF (โฉนด/ใบชำระภาษี)", type=["pdf"])
+            tax_status = st.selectbox("สถานะการชำระภาษีที่ดิน", ["ชำระแล้ว", "ยังไม่ได้ชำระ"])
+            st.file_uploader("📸 อัปโหลดรูปภาพที่ดิน (บันทึกภาพลง Drive)", accept_multiple_files=True)
+            st.file_uploader("📄 เอกสารสิทธิ์ PDF (สำเนาโฉนด/เอกสารภาษี)", type=["pdf"])
             
-        submit_land = st.form_submit_button("💾 บันทึกข้อมูลลงฐานข้อมูล")
+        submit_land = st.form_submit_button("💾 บันทึกข้อมูลทรัพย์สินถาวร")
         
         if submit_land:
             if land_id and land_name:
@@ -181,13 +179,14 @@ elif menu == "📂 บันทึกรายละเอียดที่ด�
                     "สถานะภาษี": tax_status
                 }
                 st.session_state.lands_df = pd.concat([st.session_state.lands_df, pd.DataFrame([new_land])], ignore_index=True)
-                st.success(f"🎉 บันทึกข้อมูลที่ดิน '{land_name}' เรียบร้อยแล้ว! ตารางจะอัปเดตทันทีกดปิดฟอร์ม")
+                st.success(f"🎉 ระบบบันทึกข้อมูลที่ดิน '{land_name}' ลงประวัติตารางสำเร็จแล้ว!")
             else:
-                st.error("❌ บันทึกไม่สำเร็จ: กรุณากรอกรหัสทรัพย์สินและชื่อเรียกให้ครบถ้วน")
+                st.error("❌ บันทึกไม่สำเร็จ: กรุณาระบุรหัสทรัพย์สินและชื่อเรียกให้ครบถ้วน")
 
-    st.write("---")
-    st.write("### 📋 ตารางรายชื่อที่ดินและบ้านเช่าทั้งหมดในระบบ")
+    st.write("### 📋 บัญชีรายการที่ดินและบ้านเช่าทั้งหมดในระบบ")
     st.dataframe(st.session_state.lands_df, use_container_width=True)
 
 # --- หน้าที่ 3: บันทึกรายละเอียดผู้เช่า ---
 elif menu == "👥 บันทึกรายละเอียดผู้เช่า":
+    st.title("👥 ระบบลงทะเบียนและจัดการข้อมูลผู้เช่า")
+    
