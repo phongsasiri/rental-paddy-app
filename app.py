@@ -80,17 +80,19 @@ initialize_persistent_data()
 st.sidebar.title("🌾 ระบบจัดการที่เช่า")
 st.sidebar.info(f"🔗 ลิงก์เชื่อมโยงฐานข้อมูลหลัก:\n* [เปิดดู Google Sheets]({GOOGLE_SHEET_URL})\n* [เปิดคลังภาพ Google Drive]({GOOGLE_DRIVE_FOLDER})")
 st.sidebar.write("---")
+
+# ใช้ข้อความข้อความล้วนในการดึงค่า เพื่อป้องกันบั๊กแสดงผลหน้าขาว
 menu = st.sidebar.radio(
     "เลือกหน้าเมนูการใช้งาน",
-    ["🏠 หน้าแรก (Dashboard)", "📂 บันทึกรายละเอียดที่ดิน/บ้านเช่า", "👥 บันทึกรายละเอียดผู้เช่า", "📋 บันทึกการชำระค่าเช่า", "🧑‍💼 บันทึกรายละเอียดพนักงาน"]
+    ["หน้าแรก (Dashboard)", "บันทึกรายละเอียดที่ดิน/บ้านเช่า", "บันทึกรายละเอียดผู้เช่า", "บันทึกการชำระค่าเช่า", "บันทึกรายละเอียดพนักงาน"]
 )
 
 # ==========================================
-# 4. การแสดงผลฟอร์มและตารางฝั่งขวา
+# 4. การแสดงผลฟอร์มและตารางฝั่งขวา (อิงตามข้อความล้วน)
 # ==========================================
 
 # --- 1. หน้า Dashboard ---
-if menu == "🏠 หน้าแรก (Dashboard)":
+if menu == "หน้าแรก (Dashboard)":
     st.title("📊 ภาพรวมระบบจัดการค่าเช่า (Dashboard)")
     
     total_vacant = len(st.session_state.lands_df[st.session_state.lands_df["สถานะ"] == "ว่าง"])
@@ -141,7 +143,7 @@ if menu == "🏠 หน้าแรก (Dashboard)":
         st.success("🎉 ไม่มีรายชื่อผู้เช่าค้างชำระเงินในระบบขณะนี้")
 
 # --- 2. หน้าบันทึกรายละเอียดที่ดิน ---
-elif menu == "📂 บันทึกรายละเอียดที่ดิน/บ้านเช่า":
+elif menu == "บันทึกรายละเอียดที่ดิน/บ้านเช่า":
     st.title("📂 บันทึกและจัดการข้อมูลที่ดิน/บ้านเช่า")
     
     with st.form("land_form", clear_on_submit=True):
@@ -158,8 +160,8 @@ elif menu == "📂 บันทึกรายละเอียดที่ด�
             rent_price = st.number_input("เงินค่าเช่า/รอบชำระ (บาท)", min_value=0.0, value=0.0, step=500.0)
             tax_date = st.date_input("วันครบกำหนดชำระภาษีที่ดินประจำปี")
             tax_status = st.selectbox("สถานะการชำระภาษีที่ดิน", ["ชำระแล้ว", "ยังไม่ได้ชำระ"])
-            st.file_uploader("📸 อัปโหลดรูปภาพที่ดิน (บันทึกภาพลง Drive)", accept_multiple_files=True)
-            st.file_uploader("📄 เอกสารสิทธิ์ PDF (สำเนาโฉนด/เอกสารภาษี)", type=["pdf"])
+            st.file_uploader("📸 อัปโหลดรูปภาพที่ดิน", accept_multiple_files=True)
+            st.file_uploader("📄 เอกสารสิทธิ์ PDF", type=["pdf"])
             
         submit_land = st.form_submit_button("💾 บันทึกข้อมูลทรัพย์สินถาวร")
         
@@ -181,7 +183,7 @@ elif menu == "📂 บันทึกรายละเอียดที่ด�
     st.dataframe(st.session_state.lands_df, use_container_width=True)
 
 # --- 3. หน้าบันทึกรายละเอียดผู้เช่า ---
-elif menu == "👥 บันทึกรายละเอียดผู้เช่า":
+elif menu == "บันทึกรายละเอียดผู้เช่า":
     st.title("👥 ระบบลงทะเบียนและจัดการข้อมูลผู้เช่า")
     
     with st.form("tenant_form", clear_on_submit=True):
