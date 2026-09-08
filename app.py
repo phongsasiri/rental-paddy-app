@@ -5,9 +5,9 @@ import plotly.express as px
 from datetime import datetime, timedelta
 
 # ==========================================
-# 1. การตั้งค่าระบบและลิงก์ฐานข้อมูลภายนอก (ถูกต้อง 100%)
+# 1. การตั้งค่าระบบและลิงก์ฐานข้อมูลภายนอก
 # ==========================================
-GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1rOuS3DH6cLMYf0841LrwYcoNsa8IQFLUkxKRg-Kht90/edit?gid=1501708046#gid=1501708046"
+GOOGLE_SHEET_URL = "https://google.com"
 GOOGLE_DRIVE_FOLDER = "https://google.com"
 
 st.set_page_config(page_title="ระบบจัดการที่นาและบ้านเช่า", layout="wide")
@@ -71,7 +71,7 @@ def initialize_persistent_data():
         }
         st.session_state.staff_df = pd.DataFrame(staff_data)
 
-# ดึงข้อมูลเข้าระบบ
+# ดึงข้อมูลเข้าระบบเริ่มต้น
 initialize_persistent_data()
 
 # ==========================================
@@ -81,7 +81,7 @@ st.sidebar.title("🌾 ระบบจัดการที่เช่า")
 st.sidebar.info(f"🔗 ลิงก์เชื่อมโยงฐานข้อมูลหลัก:\n* [เปิดดู Google Sheets]({GOOGLE_SHEET_URL})\n* [เปิดคลังภาพ Google Drive]({GOOGLE_DRIVE_FOLDER})")
 st.sidebar.write("---")
 
-# ข้อความตัวเลือกเมนูแบบตัวอักษรล้วน เพื่อป้องกันปัญหาระบบตรวจจับตัวอิโมจิเพี้ยน
+# ข้อความตัวเลือกเมนูแบบตัวอักษรล้วน 100% ป้องกันปัญหาระบบคัดเลือกคำเพี้ยน
 menu_options = [
     "หน้าแรก (Dashboard)", 
     "บันทึกรายละเอียดที่ดิน/บ้านเช่า", 
@@ -93,7 +93,7 @@ menu_options = [
 menu = st.sidebar.radio("เลือกหน้าเมนูการใช้งาน", menu_options)
 
 # ==========================================
-# 4. การแสดงผลฟอร์มและตารางฝั่งขวา (แมตช์คำตัวหนังสือล้วน)
+# 4. การแสดงผลฟอร์มและตารางฝั่งขวา (แบ่งบล็อกเท่ากัน)
 # ==========================================
 
 # --- 1. หน้า Dashboard ---
@@ -112,7 +112,7 @@ if menu == "หน้าแรก (Dashboard)":
     st.write("---")
     g_col1, g_col2 = st.columns(2)
     with g_col1:
-        fig = px.pie(st.session_state.lands_df, names='สถานะ', title='📊 แผนภูมิสถานะการเช่าปัจจุบัน', color='สถานะ', color_discrete_map={'ว่าง': '#cccccc', 'มีคนเช่า': '#2ca02c'})
+        fig = px.pie(st.session_state.lands_df, names='get_csv_url' if 'get_csv_url' in locals() else 'สถานะ', title='📊 แผนภูมิสถานะการเช่าปัจจุบัน', color_discrete_sequence=px.colors.qualitative.Pastel)
         st.plotly_chart(fig, use_container_width=True)
         
     with g_col2:
