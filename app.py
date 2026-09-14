@@ -48,23 +48,23 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --------------------------------------------------------------------------------
-# FIX: REPLACEMENT FOR GOOGLE PUBLISH TO WEB LINKS
+# NEW ULTRA-STABLE DATA LOADER (BYPASS 404 NOT FOUND)
 # --------------------------------------------------------------------------------
-# ใช้ลิงก์แชร์พิเศษจากหน้าจอที่คุณอัปโหลดภาพล่าสุด
-PUBLISHED_LINK = "https://google.com"
+# ใช้คีย์หลักสากลจากลิงก์ Google Sheets ของคุณโดยตรงเพื่อดึงข้อมูลได้ครบทุกแผ่นงานพร้อมกัน
+SPREADSHEET_ID = "1rOuS3DH6cLMYf0841LrwYcoNsa8IQFLUkxKRg-Kht90"
 
 @st.cache_data(ttl=1)
 def load_sheet_data(worksheet_name):
     try:
-        # การแปลงลิงก์มาตรฐาน pubhtml ให้ดึงเอาข้อมูลแยกคอลัมน์เป็นรูปแบบ CSV สากล
-        csv_url = f"{PUBLISHED_LINK}/pub?output=csv&sheet={worksheet_name}"
+        # ใช้โครงสร้างเรียกข้อมูลผ่าน tq API สากลซึ่งจะเจาะเข้าถึงแผ่นงานอื่นได้โดยไม่ติดบล็อกความปลอดภัย
+        csv_url = f"https://google.com{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet={worksheet_name}"
         df = pd.read_csv(csv_url)
         return df
     except Exception as e:
         st.error(f"ไม่สามารถโหลดแผ่นงาน {worksheet_name} ได้: {e}")
         return pd.DataFrame()
 
-# ฟังก์ชันยิงฟอร์มข้อมูลหลังบ้านเข้าระบบจัดการ Apps Script
+# ฟังก์ชันสำหรับส่งข้อมูลฟอร์มหน้าเว็บเข้าระบบ
 def submit_to_webos(worksheet_name, data_dict):
     try:
         webos_url = st.secrets["connections"]["gsheets"].get("webos_api", "")
@@ -77,7 +77,7 @@ def submit_to_webos(worksheet_name, data_dict):
         pass
     return False
 
-# ดาวน์โหลดข้อมูลสดใหม่แยกแท็บจากคลาวด์ Google
+# ดึงข้อมูลจาก Google Sheets ออกมาแสดงผลแบบเรียลไทม์
 df_properties = load_sheet_data("Properties")
 df_employees = load_sheet_data("Employees")
 df_tenants = load_sheet_data("Tenants")
@@ -143,9 +143,9 @@ if menu == "🏠 หน้าแรก (Dashboard)":
     with col3:
         st.subheader("💡 รายชื่อผู้เช่าค้างชำระค่าเช่า")
         if not df_leases.empty:
-            st.success("🎉 ไม่มีผู้เช่าค้างชำระในระบบขณะนี้")
+            st.success("🎉 ระบบฐานข้อมูลเชื่อมต่อปกติเรียบร้อยแล้ว")
         else:
-            st.write("พร้อมรับข้อมูล")
+            st.write("พร้อมทำงาน")
 
     st.subheader("📋 รายการทรัพย์สินทั้งหมดในคลัง")
     st.dataframe(df_properties, use_container_width=True)
@@ -181,8 +181,6 @@ elif menu == "🌾 ข้อมูลที่ดิน/บ้านเช่า
                     st.success("🎉 บันทึกข้อมูลเข้า Google Sheets สำเร็จ!")
                     st.cache_data.clear()
                     st.rerun()
-                else:
-                    st.info("🔄 ส่งข้อมูลผ่าน Apps Script เรียบร้อยแล้ว (ตรวจสอบหน้าชีตเพื่ออัปเดตข้อมูล)")
 
 # --------------------------------------------------------------------------------
 # 3. TENANTS PAGE
@@ -274,7 +272,7 @@ elif menu == "💰 ประวัติการชำระเงิน":
 # --------------------------------------------------------------------------------
 elif menu == "🧑‍💼 ข้อมูลพนักงาน":
     st.title("🧑‍💼 ข้อมูลพนักงานและสิทธิ์ผู้ใช้งาน")
-    tab1, tab2 = st.tabs(["🧑ะเบียนบัญชีรายชื่อพนักงาน", "➕ เพิ่มบัญชีพนักงานใหม่"])
+    tab1, tab2 = st.tabs(["🧑ทะเบียนบัญชีรายชื่อพนักงาน", "➕ เพิ่มบัญชีพนักงานใหม่"])
     with tab1:
         st.dataframe(df_employees, use_container_width=True)
     with tab2:
