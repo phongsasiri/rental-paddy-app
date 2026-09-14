@@ -1,5 +1,4 @@
-streamlit==1.35.0
-st-theme==0.1.7
+streamlit
 pandas
 numpy
 plotly
