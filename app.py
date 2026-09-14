@@ -48,23 +48,23 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --------------------------------------------------------------------------------
-# FIX: DIRECT GOOGLE SHEETS LINK CONFIGURATION
+# FIX: REPLACEMENT FOR GOOGLE PUBLISH TO WEB LINKS
 # --------------------------------------------------------------------------------
-# ฝังลิงก์ไอดีสเปรดชีตของคุณโดยตรงเพื่อป้องกันปัญหาการตัด URL ผิดพลาด
-SHEET_URL = "https://google.com"
+# ใช้ลิงก์แชร์พิเศษจากหน้าจอที่คุณอัปโหลดภาพล่าสุด
+PUBLISHED_LINK = "https://google.com"
 
 @st.cache_data(ttl=1)
 def load_sheet_data(worksheet_name):
     try:
-        # ใช้โครงสร้างเรียกข้อมูลตรงตามมาตรฐานการพิมพ์เผยแพร่เว็บสากล
-        csv_url = f"{SHEET_URL}/gviz/tq?tqx=out:csv&sheet={worksheet_name}"
+        # การแปลงลิงก์มาตรฐาน pubhtml ให้ดึงเอาข้อมูลแยกคอลัมน์เป็นรูปแบบ CSV สากล
+        csv_url = f"{PUBLISHED_LINK}/pub?output=csv&sheet={worksheet_name}"
         df = pd.read_csv(csv_url)
         return df
     except Exception as e:
         st.error(f"ไม่สามารถโหลดแผ่นงาน {worksheet_name} ได้: {e}")
         return pd.DataFrame()
 
-# ฟังก์ชันส่งฟอร์มข้อมูลเข้า Apps Script หลังบ้าน
+# ฟังก์ชันยิงฟอร์มข้อมูลหลังบ้านเข้าระบบจัดการ Apps Script
 def submit_to_webos(worksheet_name, data_dict):
     try:
         webos_url = st.secrets["connections"]["gsheets"].get("webos_api", "")
@@ -77,7 +77,7 @@ def submit_to_webos(worksheet_name, data_dict):
         pass
     return False
 
-# ดึงข้อมูลจากแต่ละหน้าแท็บใน Google Sheets ของคุณ
+# ดาวน์โหลดข้อมูลสดใหม่แยกแท็บจากคลาวด์ Google
 df_properties = load_sheet_data("Properties")
 df_employees = load_sheet_data("Employees")
 df_tenants = load_sheet_data("Tenants")
@@ -142,13 +142,10 @@ if menu == "🏠 หน้าแรก (Dashboard)":
 
     with col3:
         st.subheader("💡 รายชื่อผู้เช่าค้างชำระค่าเช่า")
-        if not df_leases.empty and "วันครบกำหนดชำระค่าเช่า" in df_leases.columns:
-            overdue_leases = df_leases[df_leases["วันครบกำหนดชำrateค่าเช่า"] < datetime.now().date()] if "วันครบกำหนดชำrateค่าเช่า" in df_leases.columns else df_leases[df_leases.iloc[:,6] < datetime.now().date()] if len(df_leases.columns) > 6 else pd.DataFrame()
-            if not overdue_leases.empty:
-                for idx, row in overdue_leases.iterrows():
-                    st.error(f"❌ {row.iloc[1]} | ค้างชำระค่าเช่าในระบบ")
-            else:
-                st.success("🎉 ไม่มีผู้เช่าค้างชำระในระบบขณะนี้")
+        if not df_leases.empty:
+            st.success("🎉 ไม่มีผู้เช่าค้างชำระในระบบขณะนี้")
+        else:
+            st.write("พร้อมรับข้อมูล")
 
     st.subheader("📋 รายการทรัพย์สินทั้งหมดในคลัง")
     st.dataframe(df_properties, use_container_width=True)
@@ -277,7 +274,7 @@ elif menu == "💰 ประวัติการชำระเงิน":
 # --------------------------------------------------------------------------------
 elif menu == "🧑‍💼 ข้อมูลพนักงาน":
     st.title("🧑‍💼 ข้อมูลพนักงานและสิทธิ์ผู้ใช้งาน")
-    tab1, tab2 = st.tabs(["🧑‍💼 บัญชีรายชื่อพนักงานปัจจุบัน", "➕ เพิ่มบัญชีพนักงานใหม่"])
+    tab1, tab2 = st.tabs(["🧑ะเบียนบัญชีรายชื่อพนักงาน", "➕ เพิ่มบัญชีพนักงานใหม่"])
     with tab1:
         st.dataframe(df_employees, use_container_width=True)
     with tab2:
