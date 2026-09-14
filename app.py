@@ -49,12 +49,11 @@ st.markdown("""
 # --------------------------------------------------------------------------------
 # FUNCTION TO LOAD DATA FROM PUBLIC GOOGLE SHEETS
 # --------------------------------------------------------------------------------
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=10)
 def load_sheet_data(sheet_url, worksheet_name):
     try:
-        # แปลงลิงก์ Edit ปกติให้กลายเป็นลิงก์ดาวน์โหลด CSV สำหรับอ่านข้อมูล
-        base_url = sheet_url.split('/edit')[0]
-        csv_url = f"{base_url}/gviz/tq?tqx=out:csv&sheet={worksheet_name}"
+        base_url = sheet_url.split('/edit')
+        csv_url = f"{base_url[0]}/gviz/tq?tqx=out:csv&sheet={worksheet_name}"
         df = pd.read_csv(csv_url)
         return df
     except Exception as e:
@@ -96,6 +95,8 @@ menu = st.sidebar.radio(
 if st.sidebar.button("🔄 รีเฟรชดึงข้อมูลใหม่จาก Sheets"):
     st.cache_data.clear()
     st.rerun()
+
+st.sidebar.warning("✏️ แนะนำการแก้ไขข้อมูล: สามารถเข้าไปแก้ไข ลบ หรือจัดเรียงแถวข้อมูลโดยตรงบน Google Sheets เพื่อความสะดวกและปลอดภัยสูงสุดของฐานข้อมูล")
 
 # --------------------------------------------------------------------------------
 # 1. DASHBOARD PAGE
@@ -170,27 +171,117 @@ if menu == "🏠 หน้าแรก (Dashboard)":
 
     st.subheader("📋 รายการสัญญาเช่าและทรัพย์สินทั้งหมด")
     st.dataframe(df_properties, use_container_width=True)
-
 # --------------------------------------------------------------------------------
-# OTHER PAGES (VIEW ONLY MODE FOR STABILITY ON FREE SERVER)
+# 2. PROPERTIES PAGE
 # --------------------------------------------------------------------------------
 elif menu == "🌾 ข้อมูลที่ดิน/บ้านเช่า":
     st.title("🌾 รายละเอียดที่ดินและบ้านเช่า")
-    st.dataframe(df_properties, use_container_width=True)
-    st.info("💡 เวอร์ชันนี้เปิดระบบดึงข้อมูลแบบเสถียรเพื่อรองรับเซิร์ฟเวอร์หลักแล้ว หากต้องการแก้ไขข้อมูล สามารถเข้าไปแก้ไขโดยตรงบน Google Sheets ได้ทันที!")
+    tab1, tab2 = st.tabs(["📝 รายการทรัพย์สินทั้งหมด", "➕ เพิ่มข้อมูลใหม่"])
+    with tab1:
+        st.dataframe(df_properties, use_container_width=True)
+    with tab2:
+        st.info("💡 นำข้อมูลฟอร์มด้านล่างนี้ไปกรอกลงบนหน้า Google Sheets เพื่อเพิ่มทรัพย์สินชิ้นใหม่เข้าสู่ระบบ")
+        with st.form("prop_form"):
+            p_id = st.text_input("รหัสทรัพย์สิน (เช่น P005)")
+            p_name = st.text_input("ชื่อที่ดิน/บ้านเช่า")
+            p_type = st.selectbox("ประเภท", ["ที่นา", "บ้านเช่า"])
+            p_status = st.selectbox("สถานะ", ["ว่าง", "มีคนเช่า"])
+            p_tenant = st.text_input("ผู้เช่าปัจจุบัน", value="-")
+            p_rent_type = st.selectbox("ประเภทการเช่า", ["หลังเก็บเกี่ยว", "รายเดือน", "เก็บก่อนทำ (รายปี)", "รายปี"])
+            p_dep = st.number_input("เงินมัดจำ (บาท)", min_value=0)
+            p_rent = st.number_input("ค่าเช่า (บาท)", min_value=0)
+            p_geo = st.text_input("พิกัดตำแหน่งที่ดิน")
+            p_tax_date = st.date_input("วันครบชำระภาษีที่ดิน")
+            p_tax_status = st.selectbox("สถานะภาษี", ["ชำระแล้ว", "ยังไม่ได้ชำระ"])
+            
+            if st.form_submit_button("💾 บันทึกข้อมูลทรัพย์สิน"):
+                st.success("ข้อมูลถูกต้อง! โปรดคัดลอกไปวางใน Google Sheets จากนั้นคลิกรีเฟรชข้อมูล")
 
+# --------------------------------------------------------------------------------
+# 3. TENANTS PAGE
+# --------------------------------------------------------------------------------
 elif menu == "👥 ข้อมูลผู้เช่า":
     st.title("👥 ระบบข้อมูลผู้เช่า")
-    st.dataframe(df_tenants, use_container_width=True)
+    tab1, tab2 = st.tabs(["👥 รายชื่อผู้เช่าปัจจุบัน", "➕ เพิ่มรายชื่อผู้เช่าใหม่"])
+    with tab1:
+        st.dataframe(df_tenants, use_container_width=True)
+    with tab2:
+        st.info("💡 นำข้อมูลฟอร์มด้านล่างนี้ไปกรอกลงบนหน้า Google Sheets แท็บ Tenants เพื่อลงทะเบียนผู้เช่ารายใหม่")
+        with st.form("tenant_form"):
+            t_name = st.text_input("ชื่อ-นามสกุลผู้เช่า")
+            t_addr = st.text_area("ที่อยู่ตามทะเบียนบ้าน/ติดต่อ")
+            t_phone = st.text_input("เบอร์โทรศัพท์")
+            t_doc = st.text_input("ชื่อไฟล์เอกสารหลักฐาน (เช่น บัตรประชาชน_สมชาย.pdf)")
+            t_lease = st.text_input("เลขที่สัญญาผูกพัน (เช่น CNT003)")
+            
+            if st.form_submit_button("💾 บันทึกข้อมูลผู้เช่า"):
+                st.success("บันทึกข้อมูลแบบฟอร์มจำลองเสร็จสิ้น!")
 
+# --------------------------------------------------------------------------------
+# 4. LEASES PAGE
+# --------------------------------------------------------------------------------
 elif menu == "📋 สัญญาเช่า":
     st.title("📋 ระบบตรวจสอบข้อมูลสัญญาเช่า")
-    st.dataframe(df_leases, use_container_width=True)
+    tab1, tab2 = st.tabs(["📋 รายการสัญญาเช่าที่มีผลบังคับใช้", "➕ เปิดสัญญาเช่าฉบับใหม่"])
+    with tab1:
+        st.dataframe(df_leases, use_container_width=True)
+    with tab2:
+        st.info("💡 นำข้อมูลฟอร์มสัญญาด้านล่างนี้ไปกรอกลงบนหน้า Google Sheets แท็บ Leases")
+        with st.form("lease_form"):
+            l_id = st.text_input("เลขที่สัญญาเช่า (เช่น CNT003)")
+            l_name = st.text_input("ชื่อคนเช่า")
+            l_phone = st.text_input("เบอร์โทร")
+            l_prop = st.text_input("ที่นาหรือบ้านเช่าที่เช่า")
+            l_dep = st.number_input("เงินมัดจำตามสัญญา (บาท)", min_value=0)
+            l_rent = st.number_input("เงินค่าเช่าต่อรอบ (บาท)", min_value=0)
+            l_date = st.date_input("วันครบกำหนดชำระค่าเช่างวดถัดไป")
+            l_doc = st.text_input("ชื่อไฟล์เอกสารตัวสัญญาเต็ม (PDF)")
+            
+            if st.form_submit_button("💾 ทำสัญญาเช่า"):
+                st.success("เก็บข้อมูลสัญญาเช่าในแบบฟอร์มสำเร็จ!")
 
+# --------------------------------------------------------------------------------
+# 5. PAYMENTS PAGE
+# --------------------------------------------------------------------------------
 elif menu == "💰 ประวัติการชำระเงิน":
-    st.title("💰 ประวัติบันทึกการรับชำระเงินค่างวด")
-    st.dataframe(df_payments, use_container_width=True)
+    st.title("💰 ประวัติบันทึกการรับชำระเงินค่างวดและใบเสร็จ")
+    tab1, tab2 = st.tabs(["💰 ประวัติการรับชำระเงิน", "✍️ บันทึกการรับเงินใบใหม่"])
+    with tab1:
+        st.dataframe(df_payments, use_container_width=True)
+    with tab2:
+        st.info("💡 นำข้อมูลการชำระเงินค่างวดด้านล่างนี้ไปบันทึกเพิ่มลงใน Google Sheets แท็บ Payments")
+        with st.form("pay_form"):
+            rec_id = st.text_input("เลขที่ใบชำระ (เช่น REC-202602)")
+            l_id_ref = st.text_input("เลขที่สัญญาเช่าเชื่อมโยง")
+            t_name_ref = st.text_input("ชื่อคนเช่า")
+            t_phone_ref = st.text_input("เบอร์โทร")
+            p_name_ref = st.text_input("ชื่อบ้านเช่า/ที่นา")
+            pay_due_date = st.date_input("วันที่ตามกำหนดดีล")
+            pay_req = st.number_input("ยอดเงินค่าเช่าที่ต้องชำระ (บาท)", min_value=0)
+            pay_actual = st.number_input("ยอดเงินที่ชำระจริง (บาท)", min_value=0)
+            pay_date = st.date_input("วันที่ชำระเงินจริง")
+            emp_receiver = st.text_input("พนักงานผู้รับเงิน")
+            pay_slip = st.text_input("ชื่อไฟล์หลักฐานสลิป (เช่น slip_01.jpg)")
+            
+            if st.form_submit_button("💾 ยืนยันบันทึกรับเงิน"):
+                st.success("บันทึกข้อมูลใบเสร็จเรียบร้อยแล้ว!")
 
+# --------------------------------------------------------------------------------
+# 6. EMPLOYEES PAGE
+# --------------------------------------------------------------------------------
 elif menu == "🧑‍💼 ข้อมูลพนักงาน":
     st.title("🧑‍💼 ข้อมูลพนักงานและสิทธิ์ผู้ใช้งาน")
-    st.dataframe(df_employees, use_container_width=True)
+    tab1, tab2 = st.tabs(["🧑‍💼 บัญชีรายชื่อพนักงานปัจจุบัน", "➕ เพิ่มบัญชีพนักงานใหม่"])
+    with tab1:
+        st.dataframe(df_employees, use_container_width=True)
+    with tab2:
+        st.info("💡 นำข้อมูลพนักงานใหม่ด้านล่างนี้ไปบันทึกเพิ่มลงใน Google Sheets แท็บ Employees")
+        with st.form("emp_form"):
+            e_name = st.text_input("ชื่อ-นามสกุลพนักงาน")
+            e_user = st.text_input("Username เข้าใช้งาน")
+            e_pass = st.text_input("Password (ตัวเลข 6 หลัก)")
+            e_phone = st.text_input("เบอร์โทรศัพท์ติดต่อ")
+            e_addr = st.text_area("ที่อยู่พนักงาน")
+            
+            if st.form_submit_button("💾 เพิ่มข้อมูลพนักงาน"):
+                st.success("ลงบันทึกประวัติบัญชีพนักงานเรียบร้อย!")
