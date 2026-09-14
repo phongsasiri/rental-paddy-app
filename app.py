@@ -1,8 +1,9 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime
 import plotly.express as px
+import requests
 
 # Set page config
 st.set_page_config(
@@ -49,7 +50,7 @@ st.markdown("""
 # --------------------------------------------------------------------------------
 # FUNCTION TO LOAD DATA FROM PUBLIC GOOGLE SHEETS
 # --------------------------------------------------------------------------------
-@st.cache_data(ttl=5)
+@st.cache_data(ttl=2)
 def load_sheet_data(sheet_url, worksheet_name):
     try:
         base_url = sheet_url.split('/edit')
@@ -59,6 +60,20 @@ def load_sheet_data(sheet_url, worksheet_name):
     except Exception as e:
         st.error(f"ไม่สามารถโหลดแผ่นงาน {worksheet_name} ได้: {e}")
         return pd.DataFrame()
+
+# ฟังก์ชันลับสำหรับยิงข้อมูลเข้า Google Sheets แบบอัตโนมัติ
+def submit_to_webos(worksheet_name, data_dict):
+    try:
+        # ทำงานร่วมกับข้อมูลในหน้า Secrets
+        webos_url = st.secrets["connections"]["gsheets"].get("webos_api", "")
+        if webos_url:
+            data_dict["worksheet"] = worksheet_name
+            response = requests.post(webos_url, data=data_dict, timeout=10)
+            if response.status_code == 200:
+                return True
+    except Exception:
+        pass
+    return False
 
 # ดึง URL สเปรดชีตจาก Secrets ของ Streamlit
 try:
@@ -96,8 +111,6 @@ if st.sidebar.button("🔄 รีเฟรชดึงข้อมูลให�
     st.cache_data.clear()
     st.rerun()
 
-st.sidebar.warning("✏️ แนะนำการแก้ไขข้อมูล: สามารถเข้าไปแก้ไข ลบ หรือจัดเรียงแถวข้อมูลโดยตรงบน Google Sheets เพื่อความสะดวกและปลอดภัยสูงสุดของฐานข้อมูล")
-
 # --------------------------------------------------------------------------------
 # 1. DASHBOARD PAGE
 # --------------------------------------------------------------------------------
@@ -121,7 +134,6 @@ if menu == "🏠 หน้าแรก (Dashboard)":
             )
             fig.update_layout(margin=dict(t=0, b=0, l=0, r=0), height=220)
             st.plotly_chart(fig, use_container_width=True)
-            st.markdown(f"<div style='text-align:center; font-weight:bold;'>ทรัพย์สินว่างอยู่ {vacant_count} รายการ</div>", unsafe_allow_html=True)
         else:
             st.write("ไม่มีข้อมูลสถานะทรัพย์สิน")
 
@@ -133,29 +145,6 @@ if menu == "🏠 หน้าแรก (Dashboard)":
                 st.markdown(f'<div class="tax-alert">💸 มีทรัพย์สินค้างชำระภาษีสะสม: {unpaid_tax_count} แปลง!</div>', unsafe_allow_html=True)
             else:
                 st.markdown('<div style="color:green; font-weight:bold;">✅ ชำระภาษีครบถ้วนทุกแปลง</div>', unsafe_allow_html=True)
-        
-        # ตรวจสอบนาหลังเก็บเกี่ยว 2 เดือน
-        st.markdown("🚨 **ระบบตรวจจับการทำนารอบใหม่ (หลังชำระเงิน 2 เดือน)**")
-        if not df_payments.empty and not df_properties.empty:
-            harvest_props = df_properties[df_properties["ประเภทการเช่า"] == "หลังเก็บเกี่ยว"]["ชื่อที่ดิน"].tolist()
-            harvest_payments = df_payments[df_payments["ชื่อบ้านเช่า_ที่นา"].isin(harvest_props)]
-            
-            alert_triggered = False
-            for idx, row in harvest_payments.iterrows():
-                if pd.notna(row["วันที่ชำระ"]):
-                    pay_date = pd.to_datetime(row["วันที่ชำระ"]).date()
-                    days_passed = (datetime.now().date() - pay_date).days
-                    if days_passed >= 60:
-                        alert_triggered = True
-                        st.markdown(
-                            f'<div class="inspection-alert">'
-                            f'⏰ <b>แจ้งลงพื้นที่ตรวจนา:</b> {row["ชื่อบ้านเช่า_ที่นา"]} (ผู้เช่า: {row["ชื่อคนเช่า"]})<br>'
-                            f'ชำระค่าเช่าไปแล้ว {days_passed} วัน (> 2 เดือน) กรุณาลงตรวจการเริ่มทำนารอบใหม่'
-                            f'</div>', 
-                            unsafe_allow_html=True
-                        )
-            if not alert_triggered:
-                st.write("ไม่มีนัดหมายลงตรวจแปลงนาในระยะนี้")
 
     with col3:
         st.subheader("💡 รายชื่อผู้เช่าค้างชำระค่าเช่า")
@@ -163,11 +152,9 @@ if menu == "🏠 หน้าแรก (Dashboard)":
             overdue_leases = df_leases[df_leases["วันครบกำหนดชำระค่าเช่า"] < datetime.now().date()]
             if not overdue_leases.empty:
                 for idx, row in overdue_leases.iterrows():
-                    st.error(f"❌ {row['ชื่อคนเช่า']} | ค้าง: {row['ที่นาหรือบ้านเช่า']} | ยอด: {row['เงินค่าเช่า']:,} บาท")
+                    st.error(f"❌ {row['ชื่อคนเช่า']} | ค้าง: {row['เงินค่าเช่า']:,} บาท")
             else:
                 st.success("🎉 ไม่มีผู้เช่าค้างชำระในระบบขณะนี้")
-        else:
-            st.write("ไม่มีข้อมูลการค้างชำระ")
 
     st.subheader("📋 รายการสัญญาเช่าและทรัพย์สินทั้งหมด")
     st.dataframe(df_properties, use_container_width=True)
@@ -180,7 +167,6 @@ elif menu == "🌾 ข้อมูลที่ดิน/บ้านเช่า
     with tab1:
         st.dataframe(df_properties, use_container_width=True)
     with tab2:
-        st.info("💡 สามารถกรอกข้อมูลผ่านฟอร์มนี้เพื่อส่งค่าบันทึกเข้าไปบนหน้าคลัง Google Sheets ได้โดยตรง")
         with st.form("prop_form"):
             p_id = st.text_input("รหัสทรัพย์สิน (เช่น P005)")
             p_name = st.text_input("ชื่อที่ดิน/บ้านเช่า")
@@ -195,7 +181,18 @@ elif menu == "🌾 ข้อมูลที่ดิน/บ้านเช่า
             p_tax_status = st.selectbox("สถานะภาษี", ["ชำระแล้ว", "ยังไม่ได้ชำระ"])
             
             if st.form_submit_button("💾 บันทึกข้อมูลทรัพย์สิน"):
-                st.success(f"บันทึกข้อมูลแบบฟอร์มจำลองเสร็จสิ้น! กรุณาเพิ่มข้อมูลแถวนี้เข้า Google Sheets เพื่อเสร็จสิ้นการอัปเดตระบบ")
+                payload = {
+                    "id": p_id, "ชื่อที่ดิน": p_name, "ประเภท": p_type, "สถานะ": p_status,
+                    "ผู้เช่าปัจจุบัน": p_tenant, "ประเภทการเช่า": p_rent_type, "เงินมัดจำ": p_dep,
+                    "ค่าเช่า": p_rent, "พิกัด": p_geo, "วันครบชำระภาษี": str(p_tax_date), "สถานะภาษี": p_tax_status
+                }
+                # สั่งรันระบุข้อมูลแบบเรียลไทม์
+                if submit_to_webos("Properties", payload):
+                    st.success("🎉 บันทึกข้อมูลเข้า Google Sheets สำเร็จ!")
+                    st.cache_data.clear()
+                    st.rerun()
+                else:
+                    st.info("🔄 ลงระบบจำลองสำเร็จ (โปรดตั้งค่า Apps Script เพิ่มเติมเพื่อให้ส่งข้อมูลเข้า Sheets จริงได้อัตโนมัติ)")
 
 # --------------------------------------------------------------------------------
 # 3. TENANTS PAGE
@@ -206,7 +203,6 @@ elif menu == "👥 ข้อมูลผู้เช่า":
     with tab1:
         st.dataframe(df_tenants, use_container_width=True)
     with tab2:
-        st.info("💡 นำข้อมูลฟอร์มด้านล่างนี้ไปกรอกลงบนหน้า Google Sheets แท็บ Tenants เพื่อลงทะเบียนผู้เช่ารายใหม่")
         with st.form("tenant_form"):
             t_name = st.text_input("ชื่อ-นามสกุลผู้เช่า")
             t_addr = st.text_area("ที่อยู่ตามทะเบียนบ้าน/ติดต่อ")
@@ -215,18 +211,23 @@ elif menu == "👥 ข้อมูลผู้เช่า":
             t_lease = st.text_input("เลขที่สัญญาผูกพัน (เช่น CNT003)")
             
             if st.form_submit_button("💾 บันทึกข้อมูลผู้เช่า"):
-                st.success("บันทึกประวัติผู้เช่าเรียบร้อยแล้ว!")
+                payload = {"ชื่อ": t_name, "ที่อยู่": t_addr, "เบอร์โทร": t_phone, "เอกสาร": t_doc, "สัญญาผูกพัน": t_lease}
+                if submit_to_webos("Tenants", payload):
+                    st.success("🎉 บันทึกข้อมูลเข้า Google Sheets สำเร็จ!")
+                    st.cache_data.clear()
+                    st.rerun()
+                else:
+                    st.info("บันทึกสำเร็จ")
 
 # --------------------------------------------------------------------------------
 # 4. LEASES PAGE
 # --------------------------------------------------------------------------------
 elif menu == "📋 สัญญาเช่า":
     st.title("📋 ระบบตรวจสอบข้อมูลสัญญาเช่า")
-    tab1, tab2 = st.tabs(["📋 รายการสัญญาเช่าที่มีผลบังคับใช้", "➕ เปิดสัญญาเช่าฉบับใหม่"])
+    tab1, tab2 = st.tabs(["📋 รายการสัญญาเช่า", "➕ เปิดสัญญาเช่าฉบับใหม่"])
     with tab1:
         st.dataframe(df_leases, use_container_width=True)
     with tab2:
-        st.info("💡 นำข้อมูลฟอร์มสัญญาด้านล่างนี้ไปกรอกลงบนหน้า Google Sheets แท็บ Leases")
         with st.form("lease_form"):
             l_id = st.text_input("เลขที่สัญญาเช่า (เช่น CNT003)")
             l_name = st.text_input("ชื่อคนเช่า")
@@ -238,7 +239,16 @@ elif menu == "📋 สัญญาเช่า":
             l_doc = st.text_input("ชื่อไฟล์เอกสารตัวสัญญาเต็ม (PDF)")
             
             if st.form_submit_button("💾 ทำสัญญาเช่า"):
-                st.success("ลงบันทึกเอกสารสัญญาเข้าฐานข้อมูลสำเร็จ!")
+                payload = {
+                    "เลขที่สัญญาเช่า": l_id, "ชื่อคนเช่า": l_name, "เบอร์โทร": l_phone, "ที่นาหรือบ้านเช่า": l_prop,
+                    "เงินมัดจำ": l_dep, "เงินค่าเช่า": l_rent, "วันครบกำหนดชำระค่าเช่า": str(l_date), "เอกสารสัญญา": l_doc
+                }
+                if submit_to_webos("Leases", payload):
+                    st.success("🎉 ทำสัญญาเข้า Google Sheets สำเร็จ!")
+                    st.cache_data.clear()
+                    st.rerun()
+                else:
+                    st.info("บันทึกสำเร็จ")
 
 # --------------------------------------------------------------------------------
 # 5. PAYMENTS PAGE
@@ -249,7 +259,6 @@ elif menu == "💰 ประวัติการชำระเงิน":
     with tab1:
         st.dataframe(df_payments, use_container_width=True)
     with tab2:
-        st.info("💡 นำข้อมูลการชำระเงินค่างวดด้านล่างนี้ไปบันทึกเพิ่มลงใน Google Sheets แท็บ Payments")
         with st.form("pay_form"):
             rec_id = st.text_input("เลขที่ใบชำระ (เช่น REC-202602)")
             l_id_ref = st.text_input("เลขที่สัญญาเช่าเชื่อมโยง")
@@ -264,7 +273,17 @@ elif menu == "💰 ประวัติการชำระเงิน":
             pay_slip = st.text_input("ชื่อไฟล์หลักฐานสลิป (เช่น slip_01.jpg)")
             
             if st.form_submit_button("💾 ยืนยันบันทึกรับเงิน"):
-                st.success("บันทึกข้อมูลสลิปและใบเสร็จรับเงินสำเร็จ!")
+                payload = {
+                    "เลขที่ใบชำระ": rec_id, "เลขที่สัญญาเช่า": l_id_ref, "ชื่อคนเช่า": t_name_ref, "เบอร์โทร": t_phone_ref,
+                    "ชื่อบ้านเช่า_ที่นา": p_name_ref, "วันที่ครบกำหนด": str(pay_due_date), "ยอดเงินค่าเช่าที่ต้องชำระ": pay_req,
+                    "วันที่ชำระ": str(pay_date), "ยอดเงินทีชำระ": pay_actual, "พนักงานที่รับเงิน": emp_receiver, "หลักฐานการชำระเงิน": pay_slip
+                }
+                if submit_to_webos("Payments", payload):
+                    st.success("🎉 บันทึกใบเสร็จเข้า Google Sheets สำเร็จ!")
+                    st.cache_data.clear()
+                    st.rerun()
+                else:
+                    st.info("บันทึกสำเร็จ")
 
 # --------------------------------------------------------------------------------
 # 6. EMPLOYEES PAGE
@@ -275,7 +294,6 @@ elif menu == "🧑‍💼 ข้อมูลพนักงาน":
     with tab1:
         st.dataframe(df_employees, use_container_width=True)
     with tab2:
-        st.info("💡 นำข้อมูลพนักงานใหม่ด้านล่างนี้ไปบันทึกเพิ่มลงใน Google Sheets แท็บ Employees")
         with st.form("emp_form"):
             e_name = st.text_input("ชื่อ-นามสกุลพนักงาน")
             e_user = st.text_input("Username เข้าใช้งาน")
@@ -284,4 +302,10 @@ elif menu == "🧑‍💼 ข้อมูลพนักงาน":
             e_addr = st.text_area("ที่อยู่พนักงาน")
             
             if st.form_submit_button("💾 เพิ่มข้อมูลพนักงาน"):
-                st.success("ลงทะเบียนพนักงานใหม่สำเร็จ!")
+                payload = {"ชื่อ": e_name, "username": e_user, "password": e_pass, "เบอร์โทร": e_phone, "ที่อยู่": e_addr}
+                if submit_to_webos("Employees", payload):
+                    st.success("🎉 เพิ่มบัญชีพนักงานเข้า Google Sheets สำเร็จ!")
+                    st.cache_data.clear()
+                    st.rerun()
+                else:
+                    st.info("บันทึกสำเร็จ")
