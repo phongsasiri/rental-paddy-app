@@ -48,23 +48,22 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --------------------------------------------------------------------------------
-# FUNCTION TO LOAD DATA FROM PUBLIC GOOGLE SHEETS
+# FUNCTION TO LOAD DATA FROM PUBLIC GOOGLE SHEETS (PUBLISH TO WEB VERSION)
 # --------------------------------------------------------------------------------
 @st.cache_data(ttl=2)
 def load_sheet_data(sheet_url, worksheet_name):
     try:
-        base_url = sheet_url.split('/edit')
-        csv_url = f"{base_url[0]}/gviz/tq?tqx=out:csv&sheet={worksheet_name}"
+        # ใช้สูตรลิงก์ดึงข้อมูลตามมาตรฐาน Publish to Web เพื่อให้ดึงข้อมูลแยกตามแผ่นงานได้ครบทุกหน้า
+        csv_url = f"{sheet_url}/gviz/tq?tqx=out:csv&sheet={worksheet_name}"
         df = pd.read_csv(csv_url)
         return df
     except Exception as e:
         st.error(f"ไม่สามารถโหลดแผ่นงาน {worksheet_name} ได้: {e}")
         return pd.DataFrame()
 
-# ฟังก์ชันลับสำหรับยิงข้อมูลเข้า Google Sheets แบบอัตโนมัติ
+# ฟังก์ชันสำหรับส่งข้อมูลผ่านหน้าเว็บตรงเข้า Google Sheets ผ่าน Apps Script
 def submit_to_webos(worksheet_name, data_dict):
     try:
-        # ทำงานร่วมกับข้อมูลในหน้า Secrets
         webos_url = st.secrets["connections"]["gsheets"].get("webos_api", "")
         if webos_url:
             data_dict["worksheet"] = worksheet_name
@@ -82,7 +81,7 @@ except Exception:
     st.error("🚨 ไม่พบลิงก์ Google Sheets ในหน้า Settings -> Secrets กรุณาตั้งค่าความลับก่อนใช้งาน")
     st.stop()
 
-# โหลดข้อมูลจริงเข้าแอปพลิเคชัน
+# โหลดข้อมูลจริงจากแต่ละแผ่นงานเข้าแอปพลิเคชัน
 df_properties = load_sheet_data(SHEET_URL, "Properties")
 df_employees = load_sheet_data(SHEET_URL, "Employees")
 df_tenants = load_sheet_data(SHEET_URL, "Tenants")
@@ -156,7 +155,7 @@ if menu == "🏠 หน้าแรก (Dashboard)":
             else:
                 st.success("🎉 ไม่มีผู้เช่าค้างชำระในระบบขณะนี้")
 
-    st.subheader("📋 รายการสัญญาเช่าและทรัพย์สินทั้งหมด")
+    st.subheader("📋 รายการทรัพย์สินทั้งหมดในคลัง")
     st.dataframe(df_properties, use_container_width=True)
 # --------------------------------------------------------------------------------
 # 2. PROPERTIES PAGE
@@ -186,13 +185,12 @@ elif menu == "🌾 ข้อมูลที่ดิน/บ้านเช่า
                     "ผู้เช่าปัจจุบัน": p_tenant, "ประเภทการเช่า": p_rent_type, "เงินมัดจำ": p_dep,
                     "ค่าเช่า": p_rent, "พิกัด": p_geo, "วันครบชำระภาษี": str(p_tax_date), "สถานะภาษี": p_tax_status
                 }
-                # สั่งรันระบุข้อมูลแบบเรียลไทม์
                 if submit_to_webos("Properties", payload):
                     st.success("🎉 บันทึกข้อมูลเข้า Google Sheets สำเร็จ!")
                     st.cache_data.clear()
                     st.rerun()
                 else:
-                    st.info("🔄 ลงระบบจำลองสำเร็จ (โปรดตั้งค่า Apps Script เพิ่มเติมเพื่อให้ส่งข้อมูลเข้า Sheets จริงได้อัตโนมัติ)")
+                    st.info("🔄 ลงระบบจำลองสำเร็จ (โปรดตั้งค่าและตรวจสอบข้อมูลใน Secrets หรือปรับปรุงเวอร์ชัน App Script ให้เรียบร้อย)")
 
 # --------------------------------------------------------------------------------
 # 3. TENANTS PAGE
