@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import plotly.express as px
-import os
+from streamlit_gsheets import GSheetsConnection
 
 # Set page config
 st.set_page_config(
@@ -48,92 +48,34 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --------------------------------------------------------------------------------
-# GOOGLE SHEETS CONNECTION INITIALIZATION
+# REAL GOOGLE SHEETS DATABASE CONNECTION & INITIALIZATION
 # --------------------------------------------------------------------------------
-# แหล่งข้อมูล Google Sheets ที่เชื่อมต่อ
-GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1rOuS3DH6cLMYf0841LrwYcoNsa8IQFLUkxKRg-Kht90/edit?gid=1501708046#gid=1501708046"
+# สร้างการเชื่อมต่อไปยัง Google Sheets (รองรับการดึงและบันทึกข้อมูลแบบเรียลไทม์)
+conn = st.connection("gsheets", type=GSheetsConnection)
 
-def get_sheet_csv_url(sheet_name):
-    # ฟังก์ชันแปลงลิงก์ Google Sheet เป็นลิงก์สำหรับดึง CSV แยกตามชื่อ Sheet (ต้องกดแชร์ให้ทุกคนมีสิทธิ์อ่านลิงก์)
-    base_url = "https://docs.google.com/spreadsheets/d/1rOuS3DH6cLMYf0841LrwYcoNsa8IQFLUkxKRg-Kht90/gviz/tq?tqx=out:csv&sheet="
-    return f"{base_url}{sheet_name}"
-
-@st.cache_data(ttl=10)
-def load_all_data_from_sheets():
-    # โหลดข้อมูลจาก Google Sheets หากเกิดข้อผิดพลาดจะใช้ข้อมูลจำลอง (Fallback)
+def load_data():
     try:
-        properties = pd.read_csv(get_sheet_csv_url("properties"))
-        # แปลงวันที่
-        if "วันครบชำระภาษี" in properties.columns:
-            properties["วันครบชำระภาษี"] = pd.to_datetime(properties["วันครบชำระภาษี"]).dt.date
-    except Exception:
-        properties = pd.DataFrame([
-            {"id": "P001", "ชื่อที่ดิน": "ที่นาแปลงเอก A", "ประเภท": "ที่นา", "สถานะ": "มีคนเช่า", "ผู้เช่าปัจจุบัน": "นายสมชาย ดีใจ", "ประเภทการเช่า": "หลังเก็บเกี่ยว", "เงินมัดจำ": 5000, "ค่าเช่า": 12000, "พิกัด": "17.6242, 100.0956", "วันครบชำระภาษี": (datetime.now() + timedelta(days=15)).date(), "สถานะภาษี": "ยังไม่ได้ชำระ", "รูปภาพ": "['นาแปลงA_1.jpg']", "เอกสาร": "โฉนด_แปลงA.pdf"},
-            {"id": "P002", "ชื่อที่ดิน": "บ้านเช่า สุขใจ ซอย 3", "ประเภท": "บ้านเช่า", "สถานะ": "มีคนเช่า", "ผู้เช่าปัจจุบัน": "นางมณี ตั้งใจ", "ประเภทการเช่า": "รายเดือน", "เงินมัดจำ": 6000, "ค่าเช่า": 3500, "พิกัด": "17.6311, 100.0922", "วันครบชำระภาษี": (datetime.now() - timedelta(days=5)).date(), "สถานะภาษี": "ยังไม่ได้ชำระ", "รูปภาพ": "['บ้านสุขใจ.jpg']", "เอกสาร": "สัญญาซื้อขาย_บ้านสุขใจ.pdf"},
-            {"id": "P003", "ชื่อที่ดิน": "ที่นาท้ายหมู่บ้าน แปลง B", "ประเภท": "ที่นา", "สถานะ": "ว่าง", "ผู้เช่าปัจจุบัน": "-", "ประเภทการเช่า": "เก็บก่อนทำ (รายปี)", "เงินมัดจำ": 0, "ค่าเช่า": 8000, "พิกัด": "17.6190, 100.1001", "วันครบชำระภาษี": (datetime.now() + timedelta(days=60)).date(), "สถานะภาษี": "ชำระแล้ว", "รูปภาพ": "[]", "เอกสาร": ""},
-            {"id": "P004", "ชื่อที่ดิน": "บ้านเช่าเรือนไทย แปลง C", "ประเภท": "บ้านเช่า", "สถานะ": "ว่าง", "ผู้เช่าปัจจุบัน": "-", "ประเภทการเช่า": "รายเดือน", "เงินมัดจำ": 10000, "ค่าเช่า": 5000, "พิกัด": "17.6255, 100.0888", "วันครบชำระภาษี": (datetime.now() + timedelta(days=120)).date(), "สถานะภาษี": "ชำระแล้ว", "รูปภาพ": "[]", "เอกสาร": ""}
-        ])
+        st.session_state.properties = conn.read(worksheet="Properties", ttl="0m")
+        st.session_state.employees = conn.read(worksheet="Employees", ttl="0m")
+        st.session_state.tenants = conn.read(worksheet="Tenants", ttl="0m")
+        st.session_state.leases = conn.read(worksheet="Leases", ttl="0m")
+        st.session_state.payments = conn.read(worksheet="Payments", ttl="0m")
+        st.session_state.initialized = True
+    except Exception as e:
+        st.error(f"❌ ไม่สามารถดึงข้อมูลจาก Google Sheets ได้: {e}")
+        st.info("กรุณาตรวจสอบการตั้งค่าไฟล์ .streamlit/secrets.toml หรือตรวจสอบชื่อแผ่นงาน (Worksheet Names)")
 
-    try:
-        employees = pd.read_csv(get_sheet_csv_url("employees"))
-    except Exception:
-        employees = pd.DataFrame([
-            {"ชื่อ": "สมศรี ขยันงาน", "username": "somsri01", "password": "123456", "เบอร์โทร": "081-111-2222", "ที่อยู่": "123 ม.1 ต.ในเมือง อ.เมือง จ.อุตรดิตถ์"},
-            {"ชื่อ": "สมบัต มั่นคง", "username": "sombat02", "password": "654321", "เบอร์โทร": "082-222-3333", "ที่อยู่": "45/6 ต.ท่าอิฐ อ.เมือง จ.อุตรดิตถ์"}
-        ])
-
-    try:
-        tenants = pd.read_csv(get_sheet_csv_url("tenants"))
-    except Exception:
-        tenants = pd.DataFrame([
-            {"ชื่อ": "นายสมชาย ดีใจ", "ที่อยู่": "99 ม.4 ต.ป่าเซ่า อ.เมือง จ.อุตรดิตถ์", "เบอร์โทร": "089-765-4321", "เอกสาร": "['บัตรประชาชน_สมชาย.pdf']", "สัญญาผูกพัน": "CNT001"},
-            {"ชื่อ": "นางมณี ตั้งใจ", "ที่อยู่": "88/1 ถ.ชื่นฤดี ต.ท่าอิฐ อ.เมือง จ.อุตรดิตถ์", "เบอร์โทร": "086-543-2109", "เอกสาร": "['บัตรประชาชน_มณี.pdf']", "สัญญาผูกพัน": "CNT002"}
-        ])
-
-    try:
-        leases = pd.read_csv(get_sheet_csv_url("leases"))
-        if "วันครบกำหนดชำระค่าเช่า" in leases.columns:
-            leases["วันครบกำหนดชำระค่าเช่า"] = pd.to_datetime(leases["วันครบกำหนดชำระค่าเช่า"]).dt.date
-    except Exception:
-        leases = pd.DataFrame([
-            {"เลขที่สัญญาเช่า": "CNT001", "ชื่อคนเช่า": "นายสมชาย ดีใจ", "เบอร์โทร": "089-765-4321", "ที่นาหรือบ้านเช่า": "ที่นาแปลงเอก A", "เงินมัดจำ": 5000, "เงินค่าเช่า": 12000, "วันครบกำหนดชำระค่าเช่า": (datetime.now() - timedelta(days=5)).date(), "เอกสารสัญญา": "สัญญาเช่าที่นา_สมชาย.pdf"},
-            {"เลขที่สัญญาเช่า": "CNT002", "ชื่อคนเช่า": "นางมณี ตั้งใจ", "เบอร์โทร": "086-543-2109", "ที่นาหรือบ้านเช่า": "บ้านเช่า สุขใจ ซอย 3", "เงินมัดจำ": 6000, "เงินค่าเช่า": 3500, "วันครบกำหนดชำระค่าเช่า": (datetime.now() - timedelta(days=2)).date(), "เอกสารสัญญา": "สัญญาเช่าบ้าน_มณี.pdf"}
-        ])
-
-    try:
-        payments = pd.read_csv(get_sheet_csv_url("payments"))
-        if "วันที่ครบกำหนด" in payments.columns:
-            payments["วันที่ครบกำหนด"] = pd.to_datetime(payments["วันที่ครบกำหนด"]).dt.date
-        if "วันที่ชำระ" in payments.columns:
-            payments["วันที่ชำระ"] = pd.to_datetime(payments["วันที่ชำระ"]).dt.date
-    except Exception:
-        payments = pd.DataFrame([
-            {"เลขที่ใบชำระ": "REC-20260701", "เลขที่สัญญาเช่า": "CNT001", "ชื่อคนเช่า": "นายสมชาย ดีใจ", "เบอร์โทร": "089-765-4321", "ชื่อบ้านเช่า_ที่นา": "ที่นาแปลงเอก A", "วันที่ครบกำหนด": (datetime.now() - timedelta(days=65)).date(), "ยอดเงินค่าเช่าที่ต้องชำระ": 12000, "วันที่ชำระ": (datetime.now() - timedelta(days=65)).date(), "ยอดเงินทีชำระ": 12000, "พนักงานที่รับเงิน": "สมศรี ขยันงาน", "หลักฐานการชำระเงิน": "slip_harvest1.jpg"}
-        ])
-
-    return properties, employees, tenants, leases, payments
-
-def save_to_google_sheets_notice():
-    # แสดงคู่มือการบันทึกข้อมูลกลับไปยัง Google Sheets โดยใช้ streamlit-gsheets connection หรือกูเกิลฟอร์ม/Web App URL
-    st.info("""
-    💡 **คำแนะนำในการเปิดสิทธิ์บันทึกข้อมูลแบบ Write-back ไปยัง Google Sheets:**
-    เนื่องจากการเขียนไฟล์กลับ (Write) ลงกูเกิลชีทโดยตรงผ่านเซิร์ฟเวอร์สาธารณะ ต้องอาศัย Service Account Credential หรือการตั้งค่า `st.connection("gsheets", type=GSheetsConnection)` ในระบบ Streamlit Community Cloud (Secrets) 
-    
-    **วิธีการตั้งค่าหลังนำโค้ดนี้ไปรัน:**
-    1. สร้างไฟล์ `.streamlit/secrets.toml` ในโปรเจกต์ของคุณ
-    2. ใส่ข้อมูลพินและคีย์เชื่อมต่อของ Google Service Account ของคุณลงไป
-    3. เปิดใช้งานสิทธิ์ของชีทให้เป็น 'Anyone with the link can edit' 
-    """)
-
-# ดึงข้อมูลจาก Sheets ลง session state
+# โหลดข้อมูลเมื่อเปิดแอปพลิเคชัน
 if 'initialized' not in st.session_state:
-    p, e, t, l, pay = load_all_data_from_sheets()
-    st.session_state.properties = p
-    st.session_state.employees = e
-    st.session_state.tenants = t
-    st.session_state.leases = l
-    st.session_state.payments = pay
-    st.session_state.initialized = True
+    load_data()
+
+# ฟังก์ชันสำหรับส่งข้อมูลชุดใหม่กลับไปบันทึกบน Google Sheets
+def update_sheets_data(worksheet_name, updated_df):
+    try:
+        conn.update(worksheet=worksheet_name, data=updated_df)
+        st.toast(f"💾 บันทึกข้อมูลลง Google Sheets ({worksheet_name}) เรียบร้อย!", icon="✅")
+    except Exception as e:
+        st.error(f"❌ เกิดข้อผิดพลาดในการบันทึกข้อมูลลง Sheets: {e}")
 
 # --------------------------------------------------------------------------------
 # SIDEBAR NAVIGATION
@@ -147,81 +89,89 @@ menu = st.sidebar.radio(
 
 st.sidebar.info(
     f"🔗 **แหล่งข้อมูลที่เชื่อมต่อ**\n"
-    f"📊 [Google Sheets Database]({GOOGLE_SHEET_URL})\n"
+    f"📊 [Google Sheets Database](https://docs.google.com/spreadsheets/d/1rOuS3DH6cLMYf0841LrwYcoNsa8IQFLUkxKRg-Kht90/edit?gid=1501708046#gid=1501708046)\n"
     f"📁 [Google Drive Storage](https://drive.google.com/drive/folders/14i1bb-NlhXDm2ybnTnfIzQexsoLPttnA)"
 )
+
+# ปุ่มกดรีเฟรชข้อมูลดึงจากชีตใหม่สด ๆ
+if st.sidebar.button("🔄 รีเฟรชดึงข้อมูลใหม่จาก Sheets"):
+    load_data()
+    st.rerun()
 
 # --------------------------------------------------------------------------------
 # 1. DASHBOARD PAGE
 # --------------------------------------------------------------------------------
 if menu == "🏠 หน้าแรก (Dashboard)":
     st.title("📊 หน้าแรก / แผงควบคุมระบบ (Dashboard)")
-    save_to_google_sheets_notice()
     
-    # Row 1: Metrics & Analytics
-    col1, col2, col3 = st.columns([1, 1.5, 1.5])
-    
-    with col1:
-        st.subheader("สถานะว่าง/มีคนเช่า")
-        df_prop = st.session_state.properties
-        vacant_count = len(df_prop[df_prop["สถานะ"] == "ว่าง"])
-        occupied_count = len(df_prop[df_prop["สถานะ"] == "มีคนเช่า"])
+    if 'properties' in st.session_state:
+        # Row 1: Metrics & Analytics
+        col1, col2, col3 = st.columns([1, 1.5, 1.5])
         
-        fig = px.pie(
-            names=["ว่าง", "มีคนเช่า"],
-            values=[vacant_count, occupied_count],
-            color=["ว่าง", "มีคนเช่า"],
-            color_discrete_map={"ว่าง": "#cbd5e1", "มีคนเช่า": "#28a745"},
-            hole=0.4
-        )
-        fig.update_layout(margin=dict(t=0, b=0, l=0, r=0), height=220)
-        st.plotly_chart(fig, use_container_width=True)
-        st.markdown(f"<div style='text-align:center; font-weight:bold;'>ทรัพย์สินว่างอยู่ {vacant_count} รายการ</div>", unsafe_allow_html=True)
-
-    with col2:
-        st.subheader("⚠️ แจ้งเตือนสิทธิ/ภาษีและภารกิจเร่งด่วน")
-        unpaid_tax_count = len(df_prop[df_prop["สถานะภาษี"] == "ยังไม่ได้ชำระ"])
-        if unpaid_tax_count > 0:
-            st.markdown(f'<div class="tax-alert">💸 มีที่ดิน/บ้านเช่าที่ยังไม่ได้ชำระภาษีสะสม: {unpaid_tax_count} แปลง!</div>', unsafe_allow_html=True)
-        else:
-            st.markdown('<div style="color:green; font-weight:bold;">✅ ชำระภาษีครบถ้วนทุกแปลง</div>', unsafe_allow_html=True)
+        with col1:
+            st.subheader("สถานะว่าง/มีคนเช่า")
+            df_prop = st.session_state.properties
+            vacant_count = len(df_prop[df_prop["สถานะ"] == "ว่าง"])
+            occupied_count = len(df_prop[df_prop["สถานะ"] == "มีคนเช่า"])
             
-        st.markdown("🚨 **ระบบตรวจจับการทำนารอบใหม่ (หลังชำระเงิน 2 เดือน)**")
-        harvest_payments = st.session_state.payments[st.session_state.payments["ชื่อบ้านเช่า_ที่นา"].isin(
-            df_prop[df_prop["ประเภทการเช่า"] == "หลังเก็บเกี่ยว"]["ชื่อที่ดิน"]
-        )]
-        
-        alert_triggered = False
-        for idx, row in harvest_payments.iterrows():
-            pay_date = pd.to_datetime(row["วันที่ชำระ"])
-            days_passed = (datetime.now() - pay_date).days
-            if days_passed >= 60:
-                alert_triggered = True
-                st.markdown(
-                    f'<div class="inspection-alert">'
-                    f'⏰ <b>แจ้งลงพื้นที่ตรวจนา:</b> {row["ชื่อบ้านเช่า_ที่นา"]} (ผู้เช่า: {row["ชื่อคนเช่า"]})<br>'
-                    f'ชำระค่าเช่าหลังเก็บเกี่ยวไปแล้ว {days_passed} วัน (> 2 เดือน) กรุณาลงตรวจว่ามีการเริ่มทำนารอบใหม่หรือไม่'
-                    f'<br><button style="margin-top:5px; border-radius:4px; border:none; padding:3px 8px;">✅ ลงตรวจแล้ว/เริ่มรอบใหม่</button>'
-                    f'</div>', 
-                    unsafe_allow_html=True
-                )
-        if not alert_triggered:
-            st.write("ไม่มีนัดหมายลงตรวจแปลงนาในระยะนี้")
+            fig = px.pie(
+                names=["ว่าง", "มีคนเช่า"],
+                values=[vacant_count, occupied_count],
+                color=["ว่าง", "มีคนเช่า"],
+                color_discrete_map={"ว่าง": "#cbd5e1", "มีคนเช่า": "#28a745"},
+                hole=0.4
+            )
+            fig.update_layout(margin=dict(t=0, b=0, l=0, r=0), height=220)
+            st.plotly_chart(fig, use_container_width=True)
+            st.markdown(f"<div style='text-align:center; font-weight:bold;'>ทรัพย์สินว่างอยู่ {vacant_count} รายการ</div>", unsafe_allow_html=True)
 
-    with col3:
-        st.subheader("💡 รายชื่อผู้เช่าค้างชำระค่าเช่า")
-        overdue_leases = st.session_state.leases[st.session_state.leases["วันครบกำหนดชำระค่าเช่า"] < datetime.now().date()]
+        with col2:
+            st.subheader("⚠️ แจ้งเตือนสิทธิ/ภาษีและภารกิจเร่งด่วน")
+            # Tax notification count
+            unpaid_tax_count = len(df_prop[df_prop["สถานะภาษี"] == "ยังไม่ได้ชำระ"])
+            if unpaid_tax_count > 0:
+                st.markdown(f'<div class="tax-alert">💸 มีที่ดิน/บ้านเช่าที่ยังไม่ได้ชำระภาษีสะสม: {unpaid_tax_count} แปลง!</div>', unsafe_allow_html=True)
+            else:
+                st.markdown('<div style="color:green; font-weight:bold;">✅ ชำระภาษีครบถ้วนทุกแปลง</div>', unsafe_allow_html=True)
+                
+            st.markdown("🚨 **ระบบตรวจจับการทำนารอบใหม่ (หลังชำระเงิน 2 เดือน)**")
+            harvest_payments = st.session_state.payments[st.session_state.payments["ชื่อบ้านเช่า_ที่นา"].isin(
+                df_prop[df_prop["ประเภทการเช่า"] == "หลังเก็บเกี่ยว"]["ชื่อที่ดิน"]
+            )]
+            
+            alert_triggered = False
+            for idx, row in harvest_payments.iterrows():
+                pay_date = pd.to_datetime(row["วันที่ชำระ"])
+                days_passed = (datetime.now() - pay_date).days
+                if days_passed >= 60:
+                    alert_triggered = True
+                    st.markdown(
+                        f'<div class="inspection-alert">'
+                        f'⏰ <b>แจ้งลงพื้นที่ตรวจนา:</b> {row["ชื่อบ้านเช่า_ที่นา"]} (ผู้เช่า: {row["ชื่อคนเช่า"]})<br>'
+                        f'ชำระค่าเช่าหลังเก็บเกี่ยวไปแล้ว {days_passed} วัน (> 2 เดือน) กรุณาลงตรวจว่ามีการเริ่มทำนารอบใหม่หรือไม่'
+                        f'</div>', 
+                        unsafe_allow_html=True
+                    )
+            if not alert_triggered:
+                st.write("ไม่มีนัดหมายลงตรวจแปลงนาในระยะนี้")
+
+        with col3:
+            st.subheader("💡 รายชื่อผู้เช่าค้างชำระค่าเช่า")
+            # Simple due date check
+            st.session_state.leases["วันครบกำหนดชำระค่าเช่า"] = pd.to_datetime(st.session_state.leases["วันครบกำหนดชำระค่าเช่า"]).dt.date
+            overdue_leases = st.session_state.leases[st.session_state.leases["วันครบกำหนดชำระค่าเช่า"] < datetime.now().date()]
+            if not overdue_leases.empty:
+                for idx, row in overdue_leases.iterrows():
+                    st.error(f"❌ {row['ชื่อคนเช่า']} | ค้างชำระ: {row['ที่นาหรือบ้านเช่า']} | ยอด: {row['เงินค่าเช่า']:,} บาท (กำหนด: {row['วันครบกำหนดชำระค่าเช่า']})")
+            else:
+                st.success("🎉 ไม่มีผู้เช่าค้างชำระในระบบขณะนี้")
+
+        # Row 2: Comprehensive Overdue Table
+        st.subheader("📋 ตารางสรุปรายการค้างชำระเงินทั้งหมด")
         if not overdue_leases.empty:
-            for idx, row in overdue_leases.iterrows():
-                st.error(f"❌ {row['ชื่อคนเช่า']} | ค้างชำระ: {row['ที่นาหรือบ้านเช่า']} | ยอด: {row['เงินค่าเช่า']:,} บาท (กำหนด: {row['วันครบกำหนดชำระค่าเช่า']})")
+            st.dataframe(overdue_leases[["เลขที่สัญญาเช่า", "ชื่อคนเช่า", "เบอร์โทร", "ที่นาหรือบ้านเช่า", "เงินค่าเช่า", "วันครบกำหนดชำระค่าเช่า"]], use_container_width=True)
         else:
-            st.success("🎉 ไม่มีผู้เช่าค้างชำระในระบบขณะนี้")
-
-    st.subheader("📋 ตารางสรุปรายการค้างชำระเงินทั้งหมด")
-    if not overdue_leases.empty:
-        st.dataframe(overdue_leases[["เลขที่สัญญาเช่า", "ชื่อคนเช่า", "เบอร์โทร", "ที่นาหรือบ้านเช่า", "เงินค่าเช่า", "วันครบกำหนดชำระค่าเช่า"]], use_container_width=True)
-    else:
-        st.write("ไม่มีข้อมูลรายการค้างชำระ")
+            st.write("ไม่มีข้อมูลรายการค้างชำระ")
 
 # --------------------------------------------------------------------------------
 # 2. PROPERTY MANAGEMENT PAGE
@@ -251,19 +201,22 @@ elif menu == "🌾 ข้อมูลที่ดิน/บ้านเช่า
             p_tax_date = st.date_input("วันครบชำระภาษีที่ดิน")
             p_tax_status = st.selectbox("สถานะภาษี", ["ยังไม่ได้ชำระ", "ชำระแล้ว"])
             
-            st.file_uploader("🖼️ อัปโหลดรูปที่ดิน (สามารถเลือกได้หลายไฟล์)", accept_multiple_files=True)
-            st.file_uploader("📄 อัพเอกสารสัญญา/โฉนด (PDF)")
+            st.file_uploader("🖼️ อัปโหลดรูปที่ดิน (ระบบจำลอง)", accept_multiple_files=True)
+            st.file_uploader("📄 อัพเอกสารสัญญา/โฉนด (PDF) (ระบบจำลอง)")
             
             submitted = st.form_submit_button("💾 บันทึกข้อมูลทรัพย์สิน")
             if submitted:
                 new_data = {
-                    "id": f"P00{len(st.session_state.properties)+1}", "ชื่อที่ดิน": p_name, "ประเภท": p_type,
+                    "id": f"P{len(st.session_state.properties)+1:03d}", "ชื่อที่ดิน": p_name, "ประเภท": p_type,
                     "สถานะ": p_status, "ผู้เช่าปัจจุบัน": p_tenant, "ประเภทการเช่า": p_rent_type,
-                    "เงินมัดจำ": p_deposit, "ค่าเช่า": p_rent, "พิกัด": p_geo, "วันครบชำระภาษี": p_tax_date,
-                    "สถานะภาษี": p_tax_status, "รูปภาพ": "[]", "เอกสาร": ""
+                    "เงินมัดจำ": p_deposit, "ค่าเช่า": p_rent, "พิกัด": p_geo, "วันครบชำระภาษี": str(p_tax_date),
+                    "สถานะภาษี": p_tax_status, "รูปภาพ": "", "เอกสาร": ""
                 }
                 st.session_state.properties = pd.concat([st.session_state.properties, pd.DataFrame([new_data])], ignore_index=True)
-                st.success("บันทึกข้อมูลเรียบร้อยแล้ว! (ระบบบันทึกจำลองใน Session State เรียบร้อย)")
+                
+                # บันทึกลง Google Sheets จริง
+                update_sheets_data("Properties", st.session_state.properties)
+                st.success("บันทึกข้อมูลเรียบร้อยแล้ว!")
                 st.rerun()
 
 # --------------------------------------------------------------------------------
@@ -271,6 +224,8 @@ elif menu == "🌾 ข้อมูลที่ดิน/บ้านเช่า
 # --------------------------------------------------------------------------------
 elif menu == "👥 ข้อมูลผู้เช่า":
     st.title("👥 ระบบจัดการข้อมูลผู้เช่า")
+    
+    st.subheader("รายชื่อผู้เช่าปัจจุบัน")
     st.dataframe(st.session_state.tenants, use_container_width=True)
     
     with st.expander("➕ เพิ่มรายชื่อผู้เช่าใหม่"):
@@ -278,12 +233,15 @@ elif menu == "👥 ข้อมูลผู้เช่า":
             t_name = st.text_input("ชื่อ-นามสกุล")
             t_address = st.text_area("ที่อยู่ตามทะเบียนบ้าน/ติดต่อ")
             t_phone = st.text_input("เบอร์โทรศัพท์")
-            st.file_uploader("📄 แนบเอกสารตรวจสอบสิทธิ์ (เช่น สำเนาบัตรประชาชน)")
+            st.file_uploader("📄 แนบเอกสารตรวจสอบสิทธิ์ (ระบบจำลอง)")
             
             t_submit = st.form_submit_button("💾 เพิ่มผู้เช่า")
             if t_submit:
-                new_t = {"ชื่อ": t_name, "ที่อยู่": t_address, "เบอร์โทร": t_phone, "เอกสาร": "[]", "สัญญาผูกพัน": "-"}
+                new_t = {"ชื่อ": t_name, "ที่อยู่": t_address, "เบอร์โทร": t_phone, "เอกสาร": "", "สัญญาผูกพัน": "-"}
                 st.session_state.tenants = pd.concat([st.session_state.tenants, pd.DataFrame([new_t])], ignore_index=True)
+                
+                # บันทึกลง Google Sheets จริง
+                update_sheets_data("Tenants", st.session_state.tenants)
                 st.success("เพิ่มข้อมูลผู้เช่าสำเร็จ!")
                 st.rerun()
 
@@ -292,30 +250,44 @@ elif menu == "👥 ข้อมูลผู้เช่า":
 # --------------------------------------------------------------------------------
 elif menu == "📋 สัญญาเช่า":
     st.title("📋 ระบบลงบันทึกสัญญาเช่า")
+    
+    st.subheader("รายการสัญญาเช่าที่มีผลบังคับใช้")
     st.dataframe(st.session_state.leases, use_container_width=True)
     
     with st.expander("➕ ทำสัญญาเช่าฉบับใหม่"):
         with st.form("lease_form"):
-            l_id = st.text_input("เลขที่สัญญาเช่า", value=f"CNT00{len(st.session_state.leases)+1}")
+            l_id = st.text_input("เลขที่สัญญาเช่า", value=f"CNT{len(st.session_state.leases)+1:03d}")
+            
             l_tenant = st.selectbox("เลือกผู้เช่า", st.session_state.tenants["ชื่อ"].tolist())
-            l_prop = st.selectbox("เลือกที่ดิน/บ้านเช่า", st.session_state.properties[st.session_state.properties["สถานะ"]=="ว่าง"]["ชื่อที่ดิน"].tolist() if any(st.session_state.properties["สถานะ"]=="ว่าง") else st.session_state.properties["ชื่อที่ดิน"].tolist())
+            vacant_props = st.session_state.properties[st.session_state.properties["สถานะ"]=="ว่าง"]["ชื่อที่ดิน"].tolist()
+            all_props = st.session_state.properties["ชื่อที่ดิน"].tolist()
+            l_prop = st.selectbox("เลือกที่ดิน/บ้านเช่า", vacant_props if vacant_props else all_props)
             
             l_dep = st.number_input("เงินมัดจำตามสัญญา (บาท)")
             l_rent = st.number_input("เงินค่าเช่าต่อรอบ (บาท)")
             l_due = st.date_input("วันครบกำหนดชำระค่าเช่างวดแรก/ถัดไป")
-            st.file_uploader("📄 อัพโหลดไฟล์เอกสารตัวสัญญาเต็ม (PDF)")
+            st.file_uploader("📄 อัพโหลดไฟล์เอกสารตัวสัญญาเต็ม (ระบบจำลอง)")
             
             l_submit = st.form_submit_button("บันทึกสัญญาเช่า")
             if l_submit:
-                phone = st.session_state.tenants[st.session_state.tenants["ชื่อ"]==l_tenant]["เบอร์โทร"].values[0]
+                phone_series = st.session_state.tenants[st.session_state.tenants["ชื่อ"]==l_tenant]["เบอร์โทร"].values
+                phone = phone_series[0] if len(phone_series) > 0 else "-"
+                
                 new_l = {
                     "เลขที่สัญญาเช่า": l_id, "ชื่อคนเช่า": l_tenant, "เบอร์โทร": phone, 
                     "ที่นาหรือบ้านเช่า": l_prop, "เงินมัดจำ": l_dep, "เงินค่าเช่า": l_rent, 
-                    "วันครบกำหนดชำระค่าเช่า": l_due, "เอกสารสัญญา": ""
+                    "วันครบกำหนดชำระค่าเช่า": str(l_due), "เอกสารสัญญา": ""
                 }
                 st.session_state.leases = pd.concat([st.session_state.leases, pd.DataFrame([new_l])], ignore_index=True)
+                
+                # อัปเดตสถานะทรัพย์สิน
                 st.session_state.properties.loc[st.session_state.properties["ชื่อที่ดิน"] == l_prop, "สถานะ"] = "มีคนเช่า"
                 st.session_state.properties.loc[st.session_state.properties["ชื่อที่ดิน"] == l_prop, "ผู้เช่าปัจจุบัน"] = l_tenant
+                
+                # ซิงค์ข้อมูลทั้ง 2 แผ่นงานขึ้นคลาวด์
+                update_sheets_data("Leases", st.session_state.leases)
+                update_sheets_data("Properties", st.session_state.properties)
+                
                 st.success("บันทึกข้อมูลสัญญาเช่าเรียบร้อยแล้ว!")
                 st.rerun()
 
@@ -324,13 +296,15 @@ elif menu == "📋 สัญญาเช่า":
 # --------------------------------------------------------------------------------
 elif menu == "💰 บันทึกการชำระเงิน":
     st.title("💰 ระบบบันทึกการชำระเงินค่างวดและออกใบเสร็จ")
+    
+    st.subheader("ประวัติบันทึกการรับชำระเงิน")
     st.dataframe(st.session_state.payments, use_container_width=True)
     
     st.write("---")
-    st.subheader("✍️ บันทึกการชำระเงินใบใหม่ (Auto-fill Connected)")
+    st.subheader("✍️ บันทึกการรับชำระเงินใบใหม่ (Auto-fill Connected)")
     
     lease_ids = st.session_state.leases["เลขที่สัญญาเช่า"].tolist()
-    selected_lease = st.selectbox("เลือกเลขที่สัญญาเช่าเชื่องโยงข้อมูล", ["-- เลือกใบสัญญา --"] + lease_ids)
+    selected_lease = st.selectbox("เลือกเลขที่สัญญาเช่าเชื่อมโยงข้อมูล", ["-- เลือกใบสัญญา --"] + lease_ids)
     
     if selected_lease != "-- เลือกใบสัญญา --":
         lease_row = st.session_state.leases[st.session_state.leases["เลขที่สัญญาเช่า"] == selected_lease].iloc[0]
@@ -346,22 +320,30 @@ elif menu == "💰 บันทึกการชำระเงิน":
         
         with st.form("pay_form"):
             rec_id = st.text_input("เลขที่ใบชำระเงิน", value=f"REC-2026{len(st.session_state.payments)+1:02d}")
-            pay_actual = st.number_input("ยอดเงินที่ชำระจริง (สามารถปรับได้ตามผลผลิตหน้างานสำหรับที่นา)", value=float(lease_row["เงินค่าเช่า"]))
+            pay_actual = st.number_input("ยอดเงินที่ชำระจริง", value=float(lease_row["เงินค่าเช่า"]))
             pay_date = st.date_input("วันที่ชำระเงินจริง")
-            emp_receiver = st.selectbox("พนักงานผู้รับเงิน", st.session_state.employees["ชื่อ"].tolist())
-            st.file_uploader("📸 แนบหลักฐานการโอนเงิน/สลิปธนาคาร")
+            emp_receiver = st.selectbox("พนักงานผู้รับเงิน", st.session_state.employees["ชื่อ"].tolist() if 'employees' in st.session_state and not st.session_state.employees.empty else ["คีย์ข้อมูลเริ่มต้น"])
+            st.file_uploader("📸 แนบหลักฐานการโอนเงิน/สลิปธนาคาร (ระบบจำลอง)")
             
             pay_submit = st.form_submit_button("💾 ยืนยันบันทึกการรับชำระและออกใบเสร็จ")
             if pay_submit:
                 new_p = {
                     "เลขที่ใบชำระ": rec_id, "เลขที่สัญญาเช่า": selected_lease, "ชื่อคนเช่า": lease_row["ชื่อคนเช่า"], 
                     "เบอร์โทร": lease_row["เบอร์โทร"], "ชื่อบ้านเช่า_ที่นา": lease_row["ที่นาหรือบ้านเช่า"], 
-                    "วันที่ครบกำหนด": lease_row["วันครบกำหนดชำระค่าเช่า"], "ยอดเงินค่าเช่าที่ต้องชำระ": lease_row["เงินค่าเช่า"],
-                    "วันที่ชำระ": pay_date, "ยอดเงินทีชำระ": pay_actual, "พนักงานที่รับเงิน": emp_receiver, "หลักฐานการชำระเงิน": "uploaded_slip.jpg"
+                    "วันที่ครบกำหนด": str(lease_row["วันครบกำหนดชำระค่าเช่า"]), "ยอดเงินค่าเช่าที่ต้องชำระ": lease_row["เงินค่าเช่า"],
+                    "วันที่ชำระ": str(pay_date), "ยอดเงินทีชำระ": pay_actual, "พนักงานที่รับเงิน": emp_receiver, "หลักฐานการชำระเงิน": ""
                 }
                 st.session_state.payments = pd.concat([st.session_state.payments, pd.DataFrame([new_p])], ignore_index=True)
-                st.session_state.leases.loc[st.session_state.leases["เลขที่สัญญาเช่า"] == selected_lease, "วันครบกำหนดชำระค่าเช่า"] = lease_row["วันครบกำหนดชำระค่าเช่า"] + timedelta(days=30)
-                st.success("👍 บันทึกรับเงินเข้าคลังสำเร็จ")
+                
+                # เลื่อนดีลงวดถัดไปไปอีก 30 วัน
+                current_due = pd.to_datetime(lease_row["วันครบกำหนดชำระค่าเช่า"]).date()
+                st.session_state.leases.loc[st.session_state.leases["เลขที่สัญญาเช่า"] == selected_lease, "วันครบกำหนดชำระค่าเช่า"] = str(current_due + timedelta(days=30))
+                
+                # ซิงค์ข้อมูลขึ้น Google Sheets
+                update_sheets_data("Payments", st.session_state.payments)
+                update_sheets_data("Leases", st.session_state.leases)
+                
+                st.success("👍 บันทึกรับเงินเข้าคลังสำเร็จและซิงค์ข้อมูลลงระบบคลาวด์แล้ว!")
                 st.rerun()
 
 # --------------------------------------------------------------------------------
@@ -369,6 +351,7 @@ elif menu == "💰 บันทึกการชำระเงิน":
 # --------------------------------------------------------------------------------
 elif menu == "🧑‍💼 ข้อมูลพนักงาน":
     st.title("🧑‍💼 ข้อมูลพนักงานและสิทธิ์ผู้ใช้งาน")
+    
     st.dataframe(st.session_state.employees, use_container_width=True)
     
     with st.expander("➕ เพิ่มบัญชีผู้ดูแล/พนักงานใหม่"):
@@ -382,9 +365,12 @@ elif menu == "🧑‍💼 ข้อมูลพนักงาน":
             e_submit = st.form_submit_button("💾 เพิ่มข้อมูลพนักงาน")
             if e_submit:
                 if not e_pass.isdigit() or len(e_pass) != 6:
-                    st.error("❌ บันทึกไม่สำเร็จ: รหัสผ่านของคุณต้องประกอบด้วย 'ตัวเลขเท่านั้นความยาว 6 หลัก'")
+                    st.error("❌ บันทึกไม่สำเร็จ: รหัสผ่านของคุณต้องประกอบด้วย 'ตัวเลขเท่านั้นความยาว 6 หลัก' ตัวอย่างเช่น 123456")
                 else:
                     new_e = {"ชื่อ": e_name, "username": e_user, "password": e_pass, "เบอร์โทร": e_phone, "ที่อยู่": e_addr}
                     st.session_state.employees = pd.concat([st.session_state.employees, pd.DataFrame([new_e])], ignore_index=True)
+                    
+                    # บันทึกลง Google Sheets จริง
+                    update_sheets_data("Employees", st.session_state.employees)
                     st.success("บันทึกประวัติพนักงานรายใหม่สำเร็จ!")
                     st.rerun()
